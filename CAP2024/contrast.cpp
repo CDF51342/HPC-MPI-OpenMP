@@ -2,25 +2,37 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hist-equ.h"
+#include <mpi.h>
 
 void run_cpu_color_test(PPM_IMG img_in);
 void run_cpu_gray_test(PGM_IMG img_in);
 
 
-int main(){
+int main(int argc, char *argv[]){
     PGM_IMG img_ibuf_g;
     PPM_IMG img_ibuf_c;
-    
+
+    //Initialize MPI
+    MPI_Init(&argc, &argv);
+
+    double tstart = MPI_Wtime();
+
     printf("Running contrast enhancement for gray-scale images.\n");
-    img_ibuf_g = read_pgm("in.pgm");
+    img_ibuf_g = read_pgm("./TestFiles/in.pgm");
     run_cpu_gray_test(img_ibuf_g);
     free_pgm(img_ibuf_g);
     
     printf("Running contrast enhancement for color images.\n");
-    img_ibuf_c = read_ppm("in.ppm");
+    img_ibuf_c = read_ppm("./TestFiles/in.ppm");
     run_cpu_color_test(img_ibuf_c);
     free_ppm(img_ibuf_c);
     
+    double tfinish = MPI_Wtime();
+    double TotalTime = tfinish - tstart;
+    printf("Total time: %f\n", TotalTime);
+
+    //Finalize MPI
+    MPI_Finalize();
     return 0;
 }
 
