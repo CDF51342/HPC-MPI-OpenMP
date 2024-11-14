@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "hist-equ.h"
 #include <mpi.h>
+#include <omp.h>
 
 void run_cpu_color_test(PPM_IMG img_in);
 void run_cpu_gray_test(PGM_IMG img_in);
@@ -16,6 +17,9 @@ int main(int argc, char *argv[]){
     MPI_Init(&argc, &argv);
 
     double tstart = MPI_Wtime();
+
+    int cores = omp_get_num_procs();
+    printf("Number of cores: %d\n", cores);
 
     printf("Running contrast enhancement for gray-scale images.\n");
     img_ibuf_g = read_pgm("./TestFiles/in.pgm");
