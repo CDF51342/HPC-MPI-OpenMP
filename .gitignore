@@ -3,3 +3,7 @@ build/
 TestFiles
 *.ppm
 *.pgm
+contrast_mpi
+contrast_mpi_omp
+contrast_omp
+contrast_seq
