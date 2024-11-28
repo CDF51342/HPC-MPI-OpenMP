@@ -8,6 +8,9 @@
 void run_cpu_color_test(PPM_IMG img_in);
 void run_cpu_gray_test(PGM_IMG img_in);
 
+const char *obtain_schedule_string(omp_sched_t schedule_type);
+void save_data_csv(char *planning, char *type, double time, double TotalTime);
+
 
 int main(int argc, char *argv[]){
     PGM_IMG img_ibuf_g;
@@ -21,10 +24,12 @@ int main(int argc, char *argv[]){
     int cores = omp_get_num_procs();
     printf("Number of cores: %d\n", cores);
 
+    double tstart_g = MPI_Wtime();
     printf("Running contrast enhancement for gray-scale images.\n");
     img_ibuf_g = read_pgm("./TestFiles/in.pgm");
     run_cpu_gray_test(img_ibuf_g);
     free_pgm(img_ibuf_g);
+    double tend_g = MPI_Wtime();
     
     printf("Running contrast enhancement for color images.\n");
     img_ibuf_c = read_ppm("./TestFiles/in.ppm");
@@ -37,7 +42,59 @@ int main(int argc, char *argv[]){
 
     //Finalize MPI
     MPI_Finalize();
+
+    // Save data time in csv
+    save_data_csv("OpenMP", "G", tend_g - tstart_g, TotalTime);
+
     return 0;
+}
+
+void save_data_csv(char *planning, char *type, double time, double TotalTime) {
+    char line[256], path_csv[256];
+    FILE *f_csv;
+
+    // Construir el nombre del archivo CSV
+    sprintf(path_csv, "data/time_%s_%s.csv", planning, type);
+
+    // Abrir el archivo en modo lectura para verificar su existencia
+    f_csv = fopen(path_csv, "r");
+    if (f_csv == NULL) {
+        // Si no existe, lo abrimos en modo escritura y escribimos la cabecera
+        f_csv = fopen(path_csv, "w");
+        fprintf(f_csv, "Threads,Schedule,ChunkSize,Time (s),TotalTime\n");
+    } else {
+        // Si existe, lo cerramos y volvemos a abrir en modo append
+        fclose(f_csv);
+        f_csv = fopen(path_csv, "a");
+    }
+
+    // Obtener información del schedule
+    omp_sched_t schedule_type;
+    int chunk_size;
+    omp_get_schedule(&schedule_type, &chunk_size);
+    const char *schedule_name = obtain_schedule_string(schedule_type);
+
+    // Crear la línea de datos y escribirla en el archivo
+    sprintf(line, "%d,%s,%d,%f,%f\n", omp_get_max_threads(), schedule_name, chunk_size, time, TotalTime);
+    fprintf(f_csv, "%s", line);
+
+    // Cerrar el archivo
+    fclose(f_csv);
+}
+
+const char *obtain_schedule_string(omp_sched_t schedule_type) {
+    switch (schedule_type) {
+        case omp_sched_static:
+            return "static";
+        case omp_sched_dynamic:
+            return "dynamic";
+        case omp_sched_guided:
+            return "guided";
+        case omp_sched_auto:
+            return "auto";
+        default:
+            return "unknown";
+    }
 }
 
 void run_cpu_color_test(PPM_IMG img_in)

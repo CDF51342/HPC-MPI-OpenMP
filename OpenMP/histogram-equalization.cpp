@@ -28,16 +28,16 @@ void histogram_equalization(unsigned char * img_out, unsigned char * img_in,
     }
     d = img_size - min;
 
-    #pragma omp parallel for
     for(i = 0; i < nbr_bin; i ++){
-        int local_cdf;
-        local_cdf = cdf += hist_in[i];
-        lut[i] = (int)(((float)local_cdf - min)*255/d + 0.5);
+        cdf += hist_in[i];
+
+        //lut[i] = (cdf - min)*(nbr_bin - 1)/d;
+        lut[i] = (int)(((float)cdf - min)*255/d + 0.5);
         if(lut[i] < 0){
             lut[i] = 0;
-        }
+        } 
     }
-    
+
     /* Get the result image */
     #pragma omp parallel for
     for(i = 0; i < img_size; i ++){
@@ -49,5 +49,3 @@ void histogram_equalization(unsigned char * img_out, unsigned char * img_in,
         }
     }
 }
-
-
