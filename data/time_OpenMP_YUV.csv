@@ -1,0 +1,4 @@
+Threads,Schedule,ChunkSize,Time (s),TotalTime
+4,dynamic,1,4.352571,15.853227
+4,dynamic,1,2.174540,13.011113
+4,dynamic,1,1.913098,13.171373

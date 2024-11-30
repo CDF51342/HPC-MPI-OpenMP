@@ -5,8 +5,14 @@
 #include <mpi.h>
 #include <omp.h>
 
-void run_cpu_color_test(PPM_IMG img_in);
-void run_cpu_gray_test(PGM_IMG img_in);
+
+typedef struct {
+    double time_hsl;
+    double time_yuv;
+} timeColor;
+
+timeColor run_cpu_color_test(PPM_IMG img_in);
+double run_cpu_gray_test(PGM_IMG img_in);
 
 const char *obtain_schedule_string(omp_sched_t schedule_type);
 void save_data_csv(char *planning, char *type, double time, double TotalTime);
@@ -24,16 +30,16 @@ int main(int argc, char *argv[]){
     int cores = omp_get_num_procs();
     printf("Number of cores: %d\n", cores);
 
-    double tstart_g = MPI_Wtime();
     printf("Running contrast enhancement for gray-scale images.\n");
     img_ibuf_g = read_pgm("./TestFiles/in.pgm");
-    run_cpu_gray_test(img_ibuf_g);
+
+    double t_g = run_cpu_gray_test(img_ibuf_g);
+
     free_pgm(img_ibuf_g);
-    double tend_g = MPI_Wtime();
     
     printf("Running contrast enhancement for color images.\n");
     img_ibuf_c = read_ppm("./TestFiles/in.ppm");
-    run_cpu_color_test(img_ibuf_c);
+    timeColor time_c = run_cpu_color_test(img_ibuf_c);
     free_ppm(img_ibuf_c);
     
     double tfinish = MPI_Wtime();
@@ -44,7 +50,9 @@ int main(int argc, char *argv[]){
     MPI_Finalize();
 
     // Save data time in csv
-    save_data_csv("OpenMP", "G", tend_g - tstart_g, TotalTime);
+    save_data_csv("OpenMP", "G", t_g, TotalTime);
+    save_data_csv("OpenMP", "HSL", time_c.time_hsl, TotalTime);
+    save_data_csv("OpenMP", "YUV", time_c.time_yuv, TotalTime);
 
     return 0;
 }
@@ -97,9 +105,10 @@ const char *obtain_schedule_string(omp_sched_t schedule_type) {
     }
 }
 
-void run_cpu_color_test(PPM_IMG img_in)
+timeColor run_cpu_color_test(PPM_IMG img_in)
 {
     PPM_IMG img_obuf_hsl, img_obuf_yuv;
+    timeColor times;
     
     printf("Starting CPU processing...\n");
     
@@ -107,6 +116,7 @@ void run_cpu_color_test(PPM_IMG img_in)
     img_obuf_hsl = contrast_enhancement_c_hsl(img_in);
     double tfinish = MPI_Wtime();
     printf("HSL processing time: %f (s)\n", tfinish - tstart);
+    times.time_hsl = tfinish - tstart;
     
     write_ppm(img_obuf_hsl, "out_hsl.ppm");
 
@@ -114,17 +124,20 @@ void run_cpu_color_test(PPM_IMG img_in)
     img_obuf_yuv = contrast_enhancement_c_yuv(img_in);
     tfinish = MPI_Wtime();
     printf("YUV processing time: %f (s)\n", tfinish - tstart);
+    times.time_yuv = tfinish - tstart;
     
     write_ppm(img_obuf_yuv, "out_yuv.ppm");
     
     free_ppm(img_obuf_hsl);
     free_ppm(img_obuf_yuv);
+
+    return times;
 }
 
 
 
 
-void run_cpu_gray_test(PGM_IMG img_in)
+double run_cpu_gray_test(PGM_IMG img_in)
 {
     PGM_IMG img_obuf;
     
@@ -138,6 +151,8 @@ void run_cpu_gray_test(PGM_IMG img_in)
     
     write_pgm(img_obuf, "out.pgm");
     free_pgm(img_obuf);
+
+    return tfinish - tstart;
 }
 
 
@@ -233,7 +248,7 @@ PGM_IMG read_pgm(const char * path){
 
     result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
 
-        
+
     fread(result.img,sizeof(unsigned char), result.w*result.h, in_file);    
     fclose(in_file);
     
