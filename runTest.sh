@@ -21,6 +21,10 @@ echo "=================================================================="
 
 echo "Recompiling..."
 make -B > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo -e "\e[31m✘\e[0m Error: Compilation failed"
+    exit 1
+fi
 
 # Check if OutputCheck directory exists
 if [ ! -d "./OutputCheck" ]; then
