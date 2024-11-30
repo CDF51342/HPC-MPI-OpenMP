@@ -8,25 +8,51 @@
 
 versions=("OpenMP" "MPI" "MPI+OpenMP")
 
-read -p "Do you want to compile the projects? (y/n): " compile_choice
-if [ "$compile_choice" == "y" ]; then
-    printf "Compiling projects...\n"
-    bash compileProjects.sh
-    printf "Projects compiled\n"
+echo "=================================================================="
+echo -e "Running tests, make sure you have \e[35mcompiled!!!\e[0m"
+echo "=================================================================="
+# Print parameter
+if [ -z "$1" ]; then
+    echo "Running all versions"
 else
-    printf "Skipping compilation...\n"
+    echo "Running version ${versions[$vSelected]}"
+fi
+echo "=================================================================="
+
+echo "Recompiling..."
+make -B > /dev/null 2>&1
+
+# Check if OutputCheck directory exists
+if [ ! -d "./OutputCheck" ]; then
+    printf "Executing sequential version...\n"
+    mpirun -np 1 ./CAP2024/build/contrast
+    # Save the output of the sequential version to check the parallel versions
+    mkdir OutputCheck
+    mv ./out* ./OutputCheck
+    echo "=================================================================="
 fi
 
-printf "Executing sequential version...\n"
-mpirun -np 1 ./CAP2024/build/contrast
-# Save the output of the sequential version to check the parallel versions
-mkdir OutputCheck
-mv ./out* ./OutputCheck
-
 # Execute OpenMP version, and save the output
-mpirun -np 1 ./OpenMP/build/contrast
-# check the difference between the sequential and OpenMP versions
+run_openmp() {
+    mpirun -np 1 ./OpenMP/build/contrast
+    check_output_difference 0
+}
+
+# Execute MPI version, and save the output
+run_mpi() {
+    mpirun -np 4 ./MPI/build/contrast
+    check_output_difference 1
+}
+
+# Execute MPI+OpenMP version, and save the output
+run_mpi_openmp() {
+    mpirun -np 4 ./MPI+OpenMP/build/contrast
+    check_output_difference 2
+}
+
+# check the difference between the sequential and parallel versions
 check_output_difference() {
+    echo "==================================="
     version=${versions[$1]}
     passed=true
     for file in ./out*; do
@@ -40,35 +66,37 @@ check_output_difference() {
         echo -e "\e[32m✔\e[0m $version version passed!"
         passed_versions[$1]="1"
     fi
+    echo "==================================="
 }
 
 passed_versions=("0" "0" "0")
 
-check_output_difference 0
-
-# Execute MPI version, and save the output
-mpirun -np 4 ./MPI/build/contrast
-# check the difference between the sequential and MPI versions
-check_output_difference 1
-
-# Execute MPI+OpenMP version, and save the output
-mpirun -np 4 ./MPI+OpenMP/build/contrast
-# check the difference between the sequential and MPI+OpenMP versions
-check_output_difference 2
+if [ -z "$1" ]; then
+    run_openmp
+    run_mpi
+    run_mpi_openmp
+else
+    case $1 in
+        0) run_openmp ;;
+        1) run_mpi ;;
+        2) run_mpi_openmp ;;
+        *) echo "Invalid parameter. Use 0 for OpenMP, 1 for MPI, or 2 for MPI+OpenMP." ;;
+    esac
+fi
 
 rm ./out*
 
-# End of script
-rm -r OutputCheck
-
-# Summary of passed versions
-echo "==================================="
-echo "Summary of passed versions:"
-for i in "${!versions[@]}"; do
-    version=${versions[$i]}
-    if [ "${passed_versions[$i]}" == "0" ]; then
-        echo -e "\e[31m✘\e[0m Error: $version version"
-    else
-        echo -e "\e[32m✔\e[0m $version version passed!"
-    fi
-done
+if [ -z "$1" ]; then
+    # Summary of passed versions
+    echo "Summary of passed versions:"
+    echo "==================================="
+    for i in "${!versions[@]}"; do
+        version=${versions[$i]}
+        if [ "${passed_versions[$i]}" == "0" ]; then
+            echo -e "\e[31m✘\e[0m Error: $version version"
+        else
+            echo -e "\e[32m✔\e[0m $version version passed!"
+        fi
+    done
+    echo "==================================="
+fi
