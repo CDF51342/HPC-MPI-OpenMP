@@ -23,11 +23,24 @@ timeGray run_cpu_gray_test(PGM_IMG img_in);
 
 const char *obtain_schedule_string(omp_sched_t schedule_type);
 void save_data_csv(char *planning, char *process, char *type, double time, double TotalTime);
+void get_custom_schedule(const char *schedule_str, const char* chunk_str, omp_sched_t *out_schedule_type, int *out_chunk_size);
 
 
 int main(int argc, char *argv[]){
     PGM_IMG img_ibuf_g;
     PPM_IMG img_ibuf_c;
+
+    // Set schedule
+    omp_sched_t schedule_type;
+    int chunk_size;
+    const char *schedule_str = getenv("C_OMP_SCHEDULE");
+    const char *chunk_str = getenv("C_OMP_CHUNK_SIZE");
+    if (schedule_str == NULL || chunk_str == NULL) {
+        schedule_str = "auto";
+        chunk_str = "0";
+    }
+    get_custom_schedule(schedule_str, chunk_str, &schedule_type, &chunk_size);
+    omp_set_schedule(schedule_type, chunk_size);
 
     //Initialize MPI
     MPI_Init(&argc, &argv);
@@ -73,6 +86,23 @@ int main(int argc, char *argv[]){
     save_data_csv("OpenMP", "color", "write-YUV", time_c.time_write_yuv, TotalTime);
 
     return 0;
+}
+
+void get_custom_schedule(const char *schedule_str, const char* chunk_str, omp_sched_t *out_schedule_type, int *out_chunk_size)
+{
+    if (strcmp(schedule_str, "static") == 0) {
+        *out_schedule_type = omp_sched_static;
+    } else if (strcmp(schedule_str, "dynamic") == 0) {
+        *out_schedule_type = omp_sched_dynamic;
+    } else if (strcmp(schedule_str, "guided") == 0) {
+        *out_schedule_type = omp_sched_guided;
+    } else if (strcmp(schedule_str, "auto") == 0) {
+        *out_schedule_type = omp_sched_auto;
+    } else {
+        *out_schedule_type = omp_sched_static;
+    }
+
+    *out_chunk_size = atoi(chunk_str);
 }
 
 void save_data_csv(char *planning, char *process, char *type, double time, double TotalTime) {
@@ -217,7 +247,7 @@ PPM_IMG read_ppm(const char * path){
     
     fread(ibuf,sizeof(unsigned char), 3 * result.w*result.h, in_file);
 
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(runtime)
     for(i = 0; i < result.w*result.h; i ++){
         result.img_r[i] = ibuf[3*i + 0];
         result.img_g[i] = ibuf[3*i + 1];
@@ -236,7 +266,7 @@ void write_ppm(PPM_IMG img, const char * path){
     
     char * obuf = (char *)malloc(3 * img.w * img.h * sizeof(char));
 
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(runtime)
     for(i = 0; i < img.w*img.h; i ++){
         obuf[3*i + 0] = img.img_r[i];
         obuf[3*i + 1] = img.img_g[i];
