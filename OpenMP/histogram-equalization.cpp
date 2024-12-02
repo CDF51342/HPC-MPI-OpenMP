@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hist-equ.h"
+#include <omp.h>
 
 
 void histogram(int * hist_out, unsigned char * img_in, int img_size, int nbr_bin){

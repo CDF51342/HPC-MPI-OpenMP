@@ -30,18 +30,6 @@ int main(int argc, char *argv[]){
     PGM_IMG img_ibuf_g;
     PPM_IMG img_ibuf_c;
 
-    // Set schedule
-    omp_sched_t schedule_type;
-    int chunk_size;
-    const char *schedule_str = getenv("C_OMP_SCHEDULE");
-    const char *chunk_str = getenv("C_OMP_CHUNK_SIZE");
-    if (schedule_str == NULL || chunk_str == NULL) {
-        schedule_str = "auto";
-        chunk_str = "0";
-    }
-    get_custom_schedule(schedule_str, chunk_str, &schedule_type, &chunk_size);
-    omp_set_schedule(schedule_type, chunk_size);
-
     //Initialize MPI
     MPI_Init(&argc, &argv);
 
@@ -189,12 +177,55 @@ timeColor run_cpu_color_test(PPM_IMG img_in)
 }
 
 
+void set_schedule_openmp(int size) {
+    // Set schedule
+    omp_sched_t schedule_type;
+    int chunk_size;
 
+    const char *schedule_str = getenv("C_OMP_SCHEDULE");
+    const char *chunk_str = getenv("C_OMP_CHUNK_SIZE");
+
+    if (schedule_str == NULL || chunk_str == NULL) {
+        schedule_str = "auto";
+        chunk_str = "0";
+    }
+
+    // Se comprueba que tipo de schedule para optimizar el chunk size en función al tamaño de la imagen
+    // if (strcmp("static", schedule_str) == 0) {
+    //     const char *k = getenv("C_OMP_K");
+    //     if (k == NULL)
+    //         k = "2";
+    //     chunk_size = size / (atoi(k) * omp_get_max_threads());
+    //     omp_set_schedule(omp_sched_static, chunk_size);
+    // }
+    // else if (strcmp("dynamic", schedule_str) == 0) {
+    //     chunk_size = size / (10 * omp_get_max_threads());
+    //     omp_set_schedule(omp_sched_dynamic, chunk_size);
+    // }
+    // else if (strcmp("guided", schedule_str) == 0) {
+    //     chunk_size = size / (10 * omp_get_max_threads());
+    //     omp_set_schedule(omp_sched_guided, chunk_size);
+    // }
+    // else {
+    //     const char *chunk_str = getenv("C_OMP_CHUNK_SIZE");
+    //     if (chunk_str == NULL) {
+    //         chunk_str = "0";
+    //     }
+
+    //     get_custom_schedule(schedule_str, chunk_str, &schedule_type, &chunk_size);
+    //     omp_set_schedule(schedule_type, chunk_size);
+    // }
+
+    get_custom_schedule(schedule_str, chunk_str, &schedule_type, &chunk_size);
+    omp_set_schedule(schedule_type, chunk_size);
+}
 
 timeGray run_cpu_gray_test(PGM_IMG img_in)
 {
     PGM_IMG img_obuf;  
     timeGray t_gray;
+
+    set_schedule_openmp(img_in.w * img_in.h);
 
     printf("Starting CPU processing...\n");
     
