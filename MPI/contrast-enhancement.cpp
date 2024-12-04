@@ -2,42 +2,34 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hist-equ.h"
+#include <mpi.h>
 
-PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
+PGM_IMG contrast_enhancement_g(PGM_IMG img_in, int rank, int size)
 {
     PGM_IMG result;
-    int hist[256];
-    
+    int hist_local[256];
+    int global_hist[256];
+
     result.w = img_in.w;
     result.h = img_in.h;
     result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+
+    unsigned char *img_local = (unsigned char *)malloc(result.w * result.h / size * sizeof(unsigned char));
+    MPI_Scatter(img_in.img, result.w * result.h / size, MPI_UNSIGNED_CHAR, img_local, result.w * result.h / size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     
-    histogram(hist, img_in.img, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img,img_in.img,hist,result.w*result.h, 256);
+    histogram(hist_local, img_local, result.w * result.h / size, 256);
+    MPI_Allreduce(hist_local, global_hist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    unsigned char *img_local_out = (unsigned char *)malloc(result.w * result.h / size * sizeof(unsigned char));
+    int *lut = histogram_lut(global_hist, result.w * result.h, 256);
+    histogram_equalization(img_local_out, img_local, result.w * result.h / size, lut);
+    MPI_Gather(img_local_out, result.w * result.h / size, MPI_UNSIGNED_CHAR, result.img, result.w * result.h / size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    
+    free(img_local);
+    free(img_local_out);
+    free(lut);
     return result;
 }
-
-PPM_IMG contrast_enhancement_c_rgb(PPM_IMG img_in)
-{
-    PPM_IMG result;
-    int hist[256];
-    
-    result.w = img_in.w;
-    result.h = img_in.h;
-    result.img_r = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    
-    histogram(hist, img_in.img_r, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_r,img_in.img_r,hist,result.w*result.h, 256);
-    histogram(hist, img_in.img_g, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_g,img_in.img_g,hist,result.w*result.h, 256);
-    histogram(hist, img_in.img_b, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_b,img_in.img_b,hist,result.w*result.h, 256);
-
-    return result;
-}
-
 
 PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
 {
@@ -51,7 +43,7 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
     y_equ = (unsigned char *)malloc(yuv_med.h*yuv_med.w*sizeof(unsigned char));
     
     histogram(hist, yuv_med.img_y, yuv_med.h * yuv_med.w, 256);
-    histogram_equalization(y_equ,yuv_med.img_y,hist,yuv_med.h * yuv_med.w, 256);
+    // histogram_equalization(y_equ,yuv_med.img_y,hist,yuv_med.h * yuv_med.w, 256);
 
     free(yuv_med.img_y);
     yuv_med.img_y = y_equ;
@@ -76,7 +68,7 @@ PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
     l_equ = (unsigned char *)malloc(hsl_med.height*hsl_med.width*sizeof(unsigned char));
 
     histogram(hist, hsl_med.l, hsl_med.height * hsl_med.width, 256);
-    histogram_equalization(l_equ, hsl_med.l,hist,hsl_med.width*hsl_med.height, 256);
+    // histogram_equalization(l_equ, hsl_med.l,hist,hsl_med.width*hsl_med.height, 256);
     
     free(hsl_med.l);
     hsl_med.l = l_equ;

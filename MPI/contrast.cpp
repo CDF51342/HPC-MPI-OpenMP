@@ -5,7 +5,7 @@
 #include <mpi.h>
 
 void run_cpu_color_test(PPM_IMG img_in);
-void run_cpu_gray_test(PGM_IMG img_in);
+void run_cpu_gray_test(PGM_IMG img_in, int rank, int size);
 
 
 int main(int argc, char *argv[]){
@@ -14,12 +14,14 @@ int main(int argc, char *argv[]){
 
     //Initialize MPI
     MPI_Init(&argc, &argv);
-
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
     double tstart = MPI_Wtime();
 
     printf("Running contrast enhancement for gray-scale images.\n");
     img_ibuf_g = read_pgm("./TestFiles/in.pgm");
-    run_cpu_gray_test(img_ibuf_g);
+    run_cpu_gray_test(img_ibuf_g, rank, size);
     free_pgm(img_ibuf_g);
     
     printf("Running contrast enhancement for color images.\n");
@@ -63,7 +65,7 @@ void run_cpu_color_test(PPM_IMG img_in)
 
 
 
-void run_cpu_gray_test(PGM_IMG img_in)
+void run_cpu_gray_test(PGM_IMG img_in, int rank, int size)
 {
     PGM_IMG img_obuf;
     
@@ -71,11 +73,14 @@ void run_cpu_gray_test(PGM_IMG img_in)
     printf("Starting CPU processing...\n");
     
     double tstart = MPI_Wtime();
-    img_obuf = contrast_enhancement_g(img_in);
+    img_obuf = contrast_enhancement_g(img_in, rank, size);
     double tfinish = MPI_Wtime();
     printf("Processing time: %f (s)\n", tfinish - tstart);
-    
-    write_pgm(img_obuf, "out.pgm");
+    if(rank == 0)
+    {
+        write_pgm(img_obuf, "out.pgm");
+        printf("Output image: out.pgm\n");
+    }
     free_pgm(img_obuf);
 }
 
