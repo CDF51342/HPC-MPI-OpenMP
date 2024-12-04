@@ -9,13 +9,11 @@
 versions=("OpenMP" "MPI" "MPI+OpenMP")
 
 echo "=================================================================="
-echo -e "Running tests, make sure you have \e[35mcompiled!!!\e[0m"
-echo "=================================================================="
 # Print parameter
 if [ -z "$1" ]; then
     echo "Running all versions"
 else
-    echo "Running version ${versions[$vSelected]}"
+    echo -e "Running version \e[35m${versions[$1]}\e[0m"
 fi
 echo "=================================================================="
 
@@ -26,13 +24,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Check if OutputCheck directory exists
-if [ ! -d "./OutputCheck" ]; then
+# Check if images_seq directory exists
+if [ ! -d "./images_seq" ]; then
     printf "Executing sequential version...\n"
     mpirun -np 1 ./CAP2024/build/contrast
     # Save the output of the sequential version to check the parallel versions
-    mkdir OutputCheck
-    mv ./out* ./OutputCheck
+    mkdir images_seq
+    mv ./out* ./images_seq
     echo "=================================================================="
 fi
 
@@ -44,7 +42,7 @@ run_openmp() {
 
 # Execute MPI version, and save the output
 run_mpi() {
-    mpirun -np 4 ./MPI/build/contrast
+    mpirun -np 2 ./MPI/build/contrast
     check_output_difference 1
 }
 
@@ -60,9 +58,9 @@ check_output_difference() {
     version=${versions[$1]}
     passed=true
     for file in ./out*; do
-        diff "$file" "./OutputCheck/$(basename "$file")" > /dev/null
+        diff "$file" "./images_seq/$(basename "$file")" > /dev/null
         if [ $? -ne 0 ]; then
-            echo -e "\e[31m✘\e[0m Error: $file differs from OutputCheck/$(basename "$file") for $version version"
+            echo -e "\e[31m✘\e[0m Error: $file differs from images_seq/$(basename "$file") for $version version"
             passed=false
         fi
     done
@@ -88,7 +86,7 @@ else
     esac
 fi
 
-rm ./out*
+# rm ./out*
 
 if [ -z "$1" ]; then
     # Summary of passed versions
