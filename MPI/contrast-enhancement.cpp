@@ -97,22 +97,22 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in, int rank, int size)
     MPI_Allreduce(hist_local, global_hist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
     
-    unsigned char *y_equ_out = (unsigned char *)malloc(yuv_med.h * yuv_med.w / size * sizeof(unsigned char));
+    unsigned char *yuv_equ_out = (unsigned char *)malloc(yuv_med.h * yuv_med.w / size * sizeof(unsigned char));
 
     
     int *lut = histogram_lut(global_hist, yuv_med.h * yuv_med.w, 256);
 
     
-    histogram_equalization(y_equ_out, y_equ_recv, yuv_med.h * yuv_med.w / size, lut);
+    histogram_equalization(yuv_equ_out, y_equ_recv, yuv_med.h * yuv_med.w / size, lut);
 
     
-    MPI_Gather(y_equ_out, yuv_med.h * yuv_med.w / size, MPI_UNSIGNED_CHAR, yuv_med.img_y, 
+    MPI_Gather(yuv_equ_out, yuv_med.h * yuv_med.w / size, MPI_UNSIGNED_CHAR, yuv_med.img_y, 
                yuv_med.h * yuv_med.w / size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
     
     free(lut);
     free(y_equ_recv);
-    free(y_equ_out);
+    free(yuv_equ_out);
 
     
     result = yuv2rgb(yuv_med);
@@ -128,27 +128,57 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in, int rank, int size)
 
 PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
 {
-    HSL_IMG hsl_med;
+    HSL_IMG local_hsl_med;
+    PPM_IMG local_result;
     PPM_IMG result;
     
     unsigned char * l_equ;
-    int hist[256];
+    int localHist[256];
+    int globalHist[256];
 
-    hsl_med = rgb2hsl(img_in);
-    l_equ = (unsigned char *)malloc(hsl_med.height*hsl_med.width*sizeof(unsigned char));
+    unsigned char *img_local_r = (unsigned char *)malloc(img_in.w * img_in.h * sizeof(unsigned char));
+    unsigned char *img_local_g = (unsigned char *)malloc(img_in.w * img_in.h * sizeof(unsigned char));
+    unsigned char *img_local_b = (unsigned char *)malloc(img_in.w * img_in.h * sizeof(unsigned char));
+    MPI_Scatter(img_in.img_r, img_in.w * img_in.h, MPI_UNSIGNED_CHAR, img_local_r, img_in.w * img_in.h, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatter(img_in.img_g, img_in.w * img_in.h, MPI_UNSIGNED_CHAR, img_local_g, img_in.w * img_in.h, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatter(img_in.img_b, img_in.w * img_in.h, MPI_UNSIGNED_CHAR, img_local_b, img_in.w * img_in.h, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
-    histogram(hist, hsl_med.l, hsl_med.height * hsl_med.width, 256);
-    int *lut = histogram_lut(hist, hsl_med.height * hsl_med.width, 256);
-    histogram_equalization(l_equ, hsl_med.l, hsl_med.height * hsl_med.width, lut);
+    local_hsl_med = rgb2hsl(img_in);
+    l_equ = (unsigned char *)malloc(local_hsl_med.height*local_hsl_med.width*sizeof(unsigned char));
+
+    histogram(localHist, local_hsl_med.l, local_hsl_med.height * local_hsl_med.width, 256);
+
+    MPI_Allreduce(localHist, globalHist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    int *lut = histogram_lut(globalHist, local_hsl_med.height * local_hsl_med.width, 256);
+    histogram_equalization(l_equ, local_hsl_med.l, local_hsl_med.height * local_hsl_med.width, lut);
     free(lut);
     
-    free(hsl_med.l);
-    hsl_med.l = l_equ;
+    free(local_hsl_med.l);
+    local_hsl_med.l = l_equ;
 
-    result = hsl2rgb(hsl_med);
-    free(hsl_med.h);
-    free(hsl_med.s);
-    free(hsl_med.l);
+    local_result = hsl2rgb(local_hsl_med);
+    free(local_hsl_med.h);
+    free(local_hsl_med.s);
+    free(local_hsl_med.l);
+
+    result.w = img_in.w;
+    result.h = img_in.h;
+    result.img_r = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+    result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+    result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+
+    MPI_Gather(local_result.img_r, result.w * result.h, MPI_UNSIGNED_CHAR, result.img_r, result.w * result.h, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gather(local_result.img_g, result.w * result.h, MPI_UNSIGNED_CHAR, result.img_g, result.w * result.h, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gather(local_result.img_b, result.w * result.h, MPI_UNSIGNED_CHAR, result.img_b, result.w * result.h, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+    free(local_result.img_r);
+    free(local_result.img_g);
+    free(local_result.img_b);
+    free(img_local_r);
+    free(img_local_g);
+    free(img_local_b);
+
     return result;
 }
 
