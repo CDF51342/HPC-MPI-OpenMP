@@ -58,7 +58,7 @@ PGM_IMG contrast_enhancement_g(PGM_IMG img_in, int rank, int size);
 
 //Contrast enhancement for color images
 PPM_IMG contrast_enhancement_c_rgb(PPM_IMG img_in);
-PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in);
+PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in, int rank, int size);
 PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in);
 
 

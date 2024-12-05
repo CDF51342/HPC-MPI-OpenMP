@@ -4,7 +4,7 @@
 #include "hist-equ.h"
 #include <mpi.h>
 
-void run_cpu_color_test(PPM_IMG img_in);
+void run_cpu_color_test(PPM_IMG img_in, int rank, int size);
 void run_cpu_gray_test(PGM_IMG img_in, int rank, int size);
 
 
@@ -26,7 +26,7 @@ int main(int argc, char *argv[]){
     
     printf("Running contrast enhancement for color images.\n");
     img_ibuf_c = read_ppm("./TestFiles/in.ppm");
-    run_cpu_color_test(img_ibuf_c);
+    run_cpu_color_test(img_ibuf_c, rank, size);
     free_ppm(img_ibuf_c);
     
     double tfinish = MPI_Wtime();
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-void run_cpu_color_test(PPM_IMG img_in)
+void run_cpu_color_test(PPM_IMG img_in, int rank, int size)
 {
     PPM_IMG img_obuf_hsl, img_obuf_yuv;
     
@@ -49,13 +49,12 @@ void run_cpu_color_test(PPM_IMG img_in)
     double tfinish = MPI_Wtime();
     printf("HSL processing time: %f (s)\n", tfinish - tstart);
     
-    int rank = 0;
     
     if(rank == 0)
     write_ppm(img_obuf_hsl, "out_hsl.ppm");
 
     tstart = MPI_Wtime();
-    img_obuf_yuv = contrast_enhancement_c_yuv(img_in);
+    img_obuf_yuv = contrast_enhancement_c_yuv(img_in, rank, size);
     tfinish = MPI_Wtime();
     printf("YUV processing time: %f (s)\n", tfinish - tstart);
     
