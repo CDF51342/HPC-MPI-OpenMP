@@ -56,9 +56,10 @@ run_mpi_openmp() {
 check_output_difference() {
     echo "==================================="
     version=${versions[$1]}
+    echo "Checking output difference for $version version..."
     passed=true
-    for file in ./out*; do
-        diff "$file" "./images_seq/$(basename "$file")" > /dev/null
+    for file in ./images_seq/out*; do
+        diff "$(basename "$file")" "./images_seq/$(basename "$file")" > result.txt 2>&1
         if [ $? -ne 0 ]; then
             echo -e "\e[31m✘\e[0m Error: $file differs from images_seq/$(basename "$file") for $version version"
             passed=false
