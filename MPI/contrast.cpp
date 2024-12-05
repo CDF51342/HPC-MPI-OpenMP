@@ -49,6 +49,9 @@ void run_cpu_color_test(PPM_IMG img_in)
     double tfinish = MPI_Wtime();
     printf("HSL processing time: %f (s)\n", tfinish - tstart);
     
+    int rank = 0;
+    
+    if(rank == 0)
     write_ppm(img_obuf_hsl, "out_hsl.ppm");
 
     tstart = MPI_Wtime();
@@ -56,7 +59,8 @@ void run_cpu_color_test(PPM_IMG img_in)
     tfinish = MPI_Wtime();
     printf("YUV processing time: %f (s)\n", tfinish - tstart);
     
-    write_ppm(img_obuf_yuv, "out_yuv.ppm");
+    if(rank == 0)
+        write_ppm(img_obuf_yuv, "out_yuv.ppm");
     
     free_ppm(img_obuf_hsl);
     free_ppm(img_obuf_yuv);
@@ -79,7 +83,6 @@ void run_cpu_gray_test(PGM_IMG img_in, int rank, int size)
     if(rank == 0)
     {
         write_pgm(img_obuf, "out.pgm");
-        printf("Output image: out.pgm\n");
     }
     free_pgm(img_obuf);
 }

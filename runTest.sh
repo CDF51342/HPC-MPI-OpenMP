@@ -42,7 +42,7 @@ run_openmp() {
 
 # Execute MPI version, and save the output
 run_mpi() {
-    mpirun -np 2 ./MPI/build/contrast
+    mpirun -np 4 ./MPI/build/contrast
     check_output_difference 1
 }
 

@@ -43,7 +43,9 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
     y_equ = (unsigned char *)malloc(yuv_med.h*yuv_med.w*sizeof(unsigned char));
     
     histogram(hist, yuv_med.img_y, yuv_med.h * yuv_med.w, 256);
-    // histogram_equalization(y_equ,yuv_med.img_y,hist,yuv_med.h * yuv_med.w, 256);
+    int *lut = histogram_lut(hist, yuv_med.h * yuv_med.w, 256);
+    histogram_equalization(y_equ, yuv_med.img_y, yuv_med.h * yuv_med.w, lut);
+    free(lut);
 
     free(yuv_med.img_y);
     yuv_med.img_y = y_equ;
@@ -68,7 +70,9 @@ PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
     l_equ = (unsigned char *)malloc(hsl_med.height*hsl_med.width*sizeof(unsigned char));
 
     histogram(hist, hsl_med.l, hsl_med.height * hsl_med.width, 256);
-    // histogram_equalization(l_equ, hsl_med.l,hist,hsl_med.width*hsl_med.height, 256);
+    int *lut = histogram_lut(hist, hsl_med.height * hsl_med.width, 256);
+    histogram_equalization(l_equ, hsl_med.l, hsl_med.height * hsl_med.width, lut);
+    free(lut);
     
     free(hsl_med.l);
     hsl_med.l = l_equ;
