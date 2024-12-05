@@ -24,6 +24,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+rm ./out*
+
 # Check if images_seq directory exists
 if [ ! -d "./images_seq" ]; then
     printf "Executing sequential version...\n"
@@ -61,7 +63,7 @@ check_output_difference() {
     for file in ./images_seq/out*; do
         diff "$(basename "$file")" "./images_seq/$(basename "$file")" > result.txt 2>&1
         if [ $? -ne 0 ]; then
-            echo -e "\e[31m✘\e[0m Error: $file differs from images_seq/$(basename "$file") for $version version"
+            echo -e "\e[31m✘\e[0m Error: $(basename "$file") differs from images_seq/$(basename "$file") for $version version"
             passed=false
         fi
     done
