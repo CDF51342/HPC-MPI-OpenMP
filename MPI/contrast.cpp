@@ -51,7 +51,7 @@ void run_cpu_color_test(PPM_IMG img_in, int rank, int size)
     
     
     if(rank == 0)
-    write_ppm(img_obuf_hsl, "out_hsl.ppm");
+        write_ppm(img_obuf_hsl, "out_hsl.ppm");
 
     tstart = MPI_Wtime();
     img_obuf_yuv = contrast_enhancement_c_yuv(img_in, rank, size);
