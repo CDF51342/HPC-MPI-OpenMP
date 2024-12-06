@@ -7,6 +7,19 @@
 void run_cpu_color_test(PPM_IMG img_in);
 void run_cpu_gray_test(PGM_IMG img_in);
 
+struct Times {
+    double ReadTimeGray;
+    double ReadTimeColor;
+    double GrayTime;
+    double HslTime;
+    double YuvTime;
+    double WriteTimeGray;
+    double WriteTimeHsl;
+    double WriteTimeYuv;
+    double TotalTime;
+};
+
+Times times;
 
 int main(int argc, char *argv[]){
     PGM_IMG img_ibuf_g;
@@ -14,22 +27,33 @@ int main(int argc, char *argv[]){
 
     //Initialize MPI
     MPI_Init(&argc, &argv);
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    
+    times.TotalTime = MPI_Wtime();
 
-    double tstart = MPI_Wtime();
-
-    printf("Running contrast enhancement for gray-scale images.\n");
+    times.ReadTimeGray = MPI_Wtime();
     img_ibuf_g = read_pgm("./TestFiles/in.pgm");
+    times.ReadTimeGray = MPI_Wtime() - times.ReadTimeGray;
+
     run_cpu_gray_test(img_ibuf_g);
     free_pgm(img_ibuf_g);
     
-    printf("Running contrast enhancement for color images.\n");
+    times.ReadTimeColor = MPI_Wtime();
     img_ibuf_c = read_ppm("./TestFiles/in.ppm");
+    times.ReadTimeColor = MPI_Wtime() - times.ReadTimeColor;
+
     run_cpu_color_test(img_ibuf_c);
     free_ppm(img_ibuf_c);
     
-    double tfinish = MPI_Wtime();
-    double TotalTime = tfinish - tstart;
-    printf("Total time: %f\n", TotalTime);
+    times.TotalTime = MPI_Wtime() - times.TotalTime;
+
+    if (rank == 0)
+    {
+        printf("Processes;ReadGray(s);ReadColor(s);Gray(s);Hsl(s);Yuv(s);WriteGray(s);WriteHsl(s);WriteYuv(s);Total(s)\n");
+        printf("%d;%f;%f;%f;%f;%f;%f;%f;%f;%f\n", size, times.ReadTimeGray, times.ReadTimeColor, times.GrayTime, times.HslTime, times.YuvTime, times.WriteTimeGray, times.WriteTimeHsl, times.WriteTimeYuv, times.TotalTime);
+    }
 
     //Finalize MPI
     MPI_Finalize();
@@ -39,44 +63,54 @@ int main(int argc, char *argv[]){
 void run_cpu_color_test(PPM_IMG img_in)
 {
     PPM_IMG img_obuf_hsl, img_obuf_yuv;
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     
-    printf("Starting CPU processing...\n");
     
-    double tstart = MPI_Wtime();
+    times.HslTime = MPI_Wtime();
     img_obuf_hsl = contrast_enhancement_c_hsl(img_in);
-    double tfinish = MPI_Wtime();
-    printf("HSL processing time: %f (s)\n", tfinish - tstart);
+    times.HslTime = MPI_Wtime() - times.HslTime;
     
-    write_ppm(img_obuf_hsl, "out_hsl.ppm");
+    if(rank == 0)
+    {
+        times.WriteTimeHsl = MPI_Wtime();
+        write_ppm(img_obuf_hsl, "out_hsl.ppm");
+        times.WriteTimeHsl = MPI_Wtime() - times.WriteTimeHsl;
+        free_ppm(img_obuf_hsl);
+    }
 
-    tstart = MPI_Wtime();
+    times.YuvTime = MPI_Wtime();
     img_obuf_yuv = contrast_enhancement_c_yuv(img_in);
-    tfinish = MPI_Wtime();
-    printf("YUV processing time: %f (s)\n", tfinish - tstart);
+    times.YuvTime = MPI_Wtime() - times.YuvTime;
+
+    if(rank == 0)
+    {
+        times.WriteTimeYuv = MPI_Wtime();
+        write_ppm(img_obuf_yuv, "out_yuv.ppm");
+        times.WriteTimeYuv = MPI_Wtime() - times.WriteTimeYuv;
+        free_ppm(img_obuf_yuv);
+    }
     
-    write_ppm(img_obuf_yuv, "out_yuv.ppm");
-    
-    free_ppm(img_obuf_hsl);
-    free_ppm(img_obuf_yuv);
 }
-
-
-
 
 void run_cpu_gray_test(PGM_IMG img_in)
 {
     PGM_IMG img_obuf;
     
-    
-    printf("Starting CPU processing...\n");
-    
-    double tstart = MPI_Wtime();
+    times.GrayTime = MPI_Wtime();
     img_obuf = contrast_enhancement_g(img_in);
-    double tfinish = MPI_Wtime();
-    printf("Processing time: %f (s)\n", tfinish - tstart);
-    
-    write_pgm(img_obuf, "out.pgm");
-    free_pgm(img_obuf);
+    times.GrayTime = MPI_Wtime() - times.GrayTime;
+
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    if(rank == 0)
+    {
+        times.WriteTimeGray = MPI_Wtime();
+        write_pgm(img_obuf, "out.pgm");
+        times.WriteTimeGray = MPI_Wtime() - times.WriteTimeGray;
+        free_pgm(img_obuf);
+    }
 }
 
 
@@ -101,7 +135,6 @@ PPM_IMG read_ppm(const char * path){
     fscanf(in_file, "%d",&result.w);
     fscanf(in_file, "%d",&result.h);
     fscanf(in_file, "%d\n",&v_max);
-    printf("Image size: %d x %d\n", result.w, result.h);
     
 
     result.img_r = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
@@ -112,6 +145,7 @@ PPM_IMG read_ppm(const char * path){
     
     fread(ibuf,sizeof(unsigned char), 3 * result.w*result.h, in_file);
 
+    #pragma omp parallel for schedule(runtime)
     for(i = 0; i < result.w*result.h; i ++){
         result.img_r[i] = ibuf[3*i + 0];
         result.img_g[i] = ibuf[3*i + 1];
@@ -130,6 +164,7 @@ void write_ppm(PPM_IMG img, const char * path){
     
     char * obuf = (char *)malloc(3 * img.w * img.h * sizeof(char));
 
+    #pragma omp parallel for schedule(runtime)
     for(i = 0; i < img.w*img.h; i ++){
         obuf[3*i + 0] = img.img_r[i];
         obuf[3*i + 1] = img.img_g[i];
@@ -167,9 +202,7 @@ PGM_IMG read_pgm(const char * path){
     fscanf(in_file, "%d",&result.w);
     fscanf(in_file, "%d",&result.h);
     fscanf(in_file, "%d\n",&v_max);
-    printf("Image size: %d x %d\n", result.w, result.h);
     
-
     result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
 
         

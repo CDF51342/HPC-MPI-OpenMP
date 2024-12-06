@@ -2,92 +2,214 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hist-equ.h"
+#include <mpi.h>
 
 PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
 {
     PGM_IMG result;
-    int hist[256];
-    
+    int hist_local[256];
+    int global_hist[256];
+
     result.w = img_in.w;
     result.h = img_in.h;
-    result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+    int size;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    unsigned char *img_local = (unsigned char *)malloc(result.w * result.h / size * sizeof(unsigned char));
+    MPI_Scatter(img_in.img, result.w * result.h / size, MPI_UNSIGNED_CHAR, img_local, result.w * result.h / size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+    histogram(hist_local, img_local, result.w * result.h / size, 256);
+    MPI_Allreduce(hist_local, global_hist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    unsigned char *img_local_out = (unsigned char *)malloc(result.w * result.h / size * sizeof(unsigned char));
+    histogram_equalization(img_local_out, img_local, global_hist, result.w * result.h / size, 256, result.w * result.h);
+
+    // Solo el proceso 0 tiene la imagen final
+    if (rank == 0)
+        result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+
+    MPI_Gather(img_local_out, result.w * result.h / size, MPI_UNSIGNED_CHAR, result.img, result.w * result.h / size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     
-    histogram(hist, img_in.img, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img,img_in.img,hist,result.w*result.h, 256);
+    free(img_local);
+    free(img_local_out);
     return result;
 }
-
-PPM_IMG contrast_enhancement_c_rgb(PPM_IMG img_in)
-{
-    PPM_IMG result;
-    int hist[256];
-    
-    result.w = img_in.w;
-    result.h = img_in.h;
-    result.img_r = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    
-    histogram(hist, img_in.img_r, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_r,img_in.img_r,hist,result.w*result.h, 256);
-    histogram(hist, img_in.img_g, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_g,img_in.img_g,hist,result.w*result.h, 256);
-    histogram(hist, img_in.img_b, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_b,img_in.img_b,hist,result.w*result.h, 256);
-
-    return result;
-}
-
 
 PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
 {
-    YUV_IMG yuv_med;
+    YUV_IMG local_yuv_med;
+    PPM_IMG local_result;
     PPM_IMG result;
+    PPM_IMG local_img_in;
     
     unsigned char * y_equ;
-    int hist[256];
-    
-    yuv_med = rgb2yuv(img_in);
-    y_equ = (unsigned char *)malloc(yuv_med.h*yuv_med.w*sizeof(unsigned char));
-    
-    histogram(hist, yuv_med.img_y, yuv_med.h * yuv_med.w, 256);
-    histogram_equalization(y_equ,yuv_med.img_y,hist,yuv_med.h * yuv_med.w, 256);
+    int localHist[256];
+    int globalHist[256];
 
-    free(yuv_med.img_y);
-    yuv_med.img_y = y_equ;
+    int size, rank;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    int local_width = img_in.w;
+    int local_height = img_in.h / size;
+    int remainder = img_in.h % size;
+    int local_size = local_width * local_height;
+
+    // Adjust the local height for the last process to handle the remainder
+    if (rank == size - 1) {
+        local_height += remainder;
+        local_size = local_width * local_height;
+    }
+
+    local_img_in.img_r = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+    local_img_in.img_g = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+    local_img_in.img_b = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+    local_img_in.w = local_width;
+    local_img_in.h = local_height;
+
+    // Scatter the image data
+    int *sendcounts = (int *)malloc(size * sizeof(int));
+    int *displs = (int *)malloc(size * sizeof(int));
+    for (int i = 0; i < size; i++) {
+        sendcounts[i] = (img_in.h / size) * img_in.w;
+        if (i == size - 1) {
+            sendcounts[i] += remainder * img_in.w;
+        }
+        displs[i] = i * (img_in.h / size) * img_in.w;
+    }
+
+    MPI_Scatterv(img_in.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_r, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatterv(img_in.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_g, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatterv(img_in.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_b, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+    local_yuv_med = rgb2yuv(local_img_in);
+    y_equ = (unsigned char *)malloc(local_yuv_med.h * local_yuv_med.w * sizeof(unsigned char));
+
+    histogram(localHist, local_yuv_med.img_y, local_yuv_med.h * local_yuv_med.w, 256);
+    MPI_Allreduce(localHist, globalHist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    histogram_equalization(y_equ, local_yuv_med.img_y, globalHist, local_yuv_med.h * local_yuv_med.w, 256, img_in.h * img_in.w);
     
-    result = yuv2rgb(yuv_med);
-    free(yuv_med.img_y);
-    free(yuv_med.img_u);
-    free(yuv_med.img_v);
-    
+    free(local_yuv_med.img_y);
+    local_yuv_med.img_y = y_equ;
+
+    local_result = yuv2rgb(local_yuv_med);
+    free(local_yuv_med.img_u);
+    free(local_yuv_med.img_v);
+    free(local_yuv_med.img_y);
+
+    if (rank == 0) {
+        result.w = img_in.w;
+        result.h = img_in.h;
+        result.img_r = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+        result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+        result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+    }
+
+    MPI_Gatherv(local_result.img_r, local_size, MPI_UNSIGNED_CHAR, result.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_result.img_g, local_size, MPI_UNSIGNED_CHAR, result.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_result.img_b, local_size, MPI_UNSIGNED_CHAR, result.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+    free(local_result.img_r);
+    free(local_result.img_g);
+    free(local_result.img_b);
+    free(local_img_in.img_r);
+    free(local_img_in.img_g);
+    free(local_img_in.img_b);
+    free(sendcounts);
+    free(displs);
+
     return result;
 }
 
 PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
 {
-    HSL_IMG hsl_med;
+    HSL_IMG local_hsl_med;
+    PPM_IMG local_result;
     PPM_IMG result;
+    PPM_IMG local_img_in;
     
     unsigned char * l_equ;
-    int hist[256];
+    int localHist[256];
+    int globalHist[256];
 
-    hsl_med = rgb2hsl(img_in);
-    l_equ = (unsigned char *)malloc(hsl_med.height*hsl_med.width*sizeof(unsigned char));
+    int size, rank;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    histogram(hist, hsl_med.l, hsl_med.height * hsl_med.width, 256);
-    histogram_equalization(l_equ, hsl_med.l,hist,hsl_med.width*hsl_med.height, 256);
+    int local_width = img_in.w;
+    int local_height = img_in.h / size;
+    int remainder = img_in.h % size;
+    int local_size = local_width * local_height;
+
+    // Adjust the local height for the last process to handle the remainder
+    if (rank == size - 1) {
+        local_height += remainder;
+        local_size = local_width * local_height;
+    }
+
+    local_img_in.img_r = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+    local_img_in.img_g = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+    local_img_in.img_b = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+    local_img_in.w = local_width;
+    local_img_in.h = local_height;
+
+    // Scatter the image data
+    int *sendcounts = (int *)malloc(size * sizeof(int));
+    int *displs = (int *)malloc(size * sizeof(int));
+    for (int i = 0; i < size; i++) {
+        sendcounts[i] = (img_in.h / size) * img_in.w;
+        if (i == size - 1) {
+            sendcounts[i] += remainder * img_in.w;
+        }
+        displs[i] = i * (img_in.h / size) * img_in.w;
+    }
+
+    MPI_Scatterv(img_in.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_r, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatterv(img_in.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_g, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Scatterv(img_in.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_b, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+    local_hsl_med = rgb2hsl(local_img_in);
+    l_equ = (unsigned char *)malloc(local_hsl_med.height * local_hsl_med.width * sizeof(unsigned char));
+
+    histogram(localHist, local_hsl_med.l, local_hsl_med.height * local_hsl_med.width, 256);
+    MPI_Allreduce(localHist, globalHist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    histogram_equalization(l_equ, local_hsl_med.l, globalHist, local_hsl_med.height * local_hsl_med.width, 256, img_in.h * img_in.w);
     
-    free(hsl_med.l);
-    hsl_med.l = l_equ;
+    free(local_hsl_med.l);
+    local_hsl_med.l = l_equ;
 
-    result = hsl2rgb(hsl_med);
-    free(hsl_med.h);
-    free(hsl_med.s);
-    free(hsl_med.l);
+    local_result = hsl2rgb(local_hsl_med);
+    free(local_hsl_med.h);
+    free(local_hsl_med.s);
+    free(local_hsl_med.l);
+
+    if (rank == 0) {
+        result.w = img_in.w;
+        result.h = img_in.h;
+        result.img_r = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+        result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+        result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+    }
+
+    MPI_Gatherv(local_result.img_r, local_size, MPI_UNSIGNED_CHAR, result.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_result.img_g, local_size, MPI_UNSIGNED_CHAR, result.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_result.img_b, local_size, MPI_UNSIGNED_CHAR, result.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+    free(local_result.img_r);
+    free(local_result.img_g);
+    free(local_result.img_b);
+    free(local_img_in.img_r);
+    free(local_img_in.img_g);
+    free(local_img_in.img_b);
+    free(sendcounts);
+    free(displs);
+
     return result;
 }
-
 
 //Convert RGB to HSL, assume R,G,B in [0, 255]
 //Output H, S in [0.0, 1.0] and L in [0, 255]
@@ -102,6 +224,7 @@ HSL_IMG rgb2hsl(PPM_IMG img_in)
     img_out.s = (float *)malloc(img_in.w * img_in.h * sizeof(float));
     img_out.l = (unsigned char *)malloc(img_in.w * img_in.h * sizeof(unsigned char));
     
+    #pragma omp parallel for private(H, S, L) schedule(runtime)
     for(i = 0; i < img_in.w*img_in.h; i ++){
         
         float var_r = ( (float)img_in.img_r[i]/255 );//Convert RGB to [0,1]
@@ -179,6 +302,7 @@ PPM_IMG hsl2rgb(HSL_IMG img_in)
     result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     
+    #pragma omp parallel for schedule(runtime)
     for(i = 0; i < img_in.width*img_in.height; i ++){
         float H = img_in.h[i];
         float S = img_in.s[i];
@@ -228,6 +352,7 @@ YUV_IMG rgb2yuv(PPM_IMG img_in)
     img_out.img_u = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
     img_out.img_v = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
 
+    #pragma omp parallel for private(r, g, b, y, cb, cr) schedule(runtime)
     for(i = 0; i < img_out.w*img_out.h; i ++){
         r = img_in.img_r[i];
         g = img_in.img_g[i];
@@ -270,6 +395,7 @@ PPM_IMG yuv2rgb(YUV_IMG img_in)
     img_out.img_g = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
     img_out.img_b = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
 
+    #pragma omp parallel for private(y, cb, cr, rt, gt, bt) schedule(runtime)
     for(i = 0; i < img_out.w*img_out.h; i ++){
         y  = (int)img_in.img_y[i];
         cb = (int)img_in.img_u[i] - 128;
