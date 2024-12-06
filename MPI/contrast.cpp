@@ -51,8 +51,8 @@ int main(int argc, char *argv[]){
 
     if (rank == 0)
     {
-        printf("Processes;ReadGray(s);ReadColor(s);Gray(s);Hsl(s);Yuv(s);WriteGray(s);WriteHsl(s);WriteYuv(s);Total(s)\n");
-        printf("%d;%f;%f;%f;%f;%f;%f;%f;%f;%f\n", size, times.ReadTimeGray, times.ReadTimeColor, times.GrayTime, times.HslTime, times.YuvTime, times.WriteTimeGray, times.WriteTimeHsl, times.WriteTimeYuv, times.TotalTime);
+        printf("Processes,ReadGray(s),ReadColor(s),Gray(s),Hsl(s),Yuv(s),WriteGray(s),WriteHsl(s),WriteYuv(s),Total(s)\n"),
+        printf("%d,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", size, times.ReadTimeGray, times.ReadTimeColor, times.GrayTime, times.HslTime, times.YuvTime, times.WriteTimeGray, times.WriteTimeHsl, times.WriteTimeYuv, times.TotalTime);
     }
 
     //Finalize MPI
