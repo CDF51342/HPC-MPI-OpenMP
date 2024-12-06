@@ -24,7 +24,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-rm ./out*
+rm ./out* -f
 
 # Check if images_seq directory exists
 if [ ! -d "./images_seq" ]; then

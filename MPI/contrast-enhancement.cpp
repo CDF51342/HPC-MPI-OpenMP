@@ -24,8 +24,7 @@ PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
     MPI_Allreduce(hist_local, global_hist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
     unsigned char *img_local_out = (unsigned char *)malloc(result.w * result.h / size * sizeof(unsigned char));
-    int *lut = histogram_lut(global_hist, result.w * result.h, 256);
-    histogram_equalization(img_local_out, img_local, result.w * result.h / size, lut);
+    histogram_equalization(img_local_out, img_local, global_hist, result.w * result.h / size, 256, result.w * result.h);
 
     // Solo el proceso 0 tiene la imagen final
     if (rank == 0)
@@ -35,7 +34,6 @@ PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
     
     free(img_local);
     free(img_local_out);
-    free(lut);
     return result;
 }
 
@@ -92,9 +90,7 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
     histogram(localHist, local_yuv_med.img_y, local_yuv_med.h * local_yuv_med.w, 256);
     MPI_Allreduce(localHist, globalHist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-    int *lut = histogram_lut(globalHist, img_in.h * img_in.w, 256); // Use global image size
-    histogram_equalization(y_equ, local_yuv_med.img_y, local_yuv_med.h * local_yuv_med.w, lut);
-    free(lut);
+    histogram_equalization(y_equ, local_yuv_med.img_y, globalHist, local_yuv_med.h * local_yuv_med.w, 256, img_in.h * img_in.w);
     
     free(local_yuv_med.img_y);
     local_yuv_med.img_y = y_equ;
@@ -181,9 +177,7 @@ PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
     histogram(localHist, local_hsl_med.l, local_hsl_med.height * local_hsl_med.width, 256);
     MPI_Allreduce(localHist, globalHist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-    int *lut = histogram_lut(globalHist, img_in.h * img_in.w, 256); // Use global image size
-    histogram_equalization(l_equ, local_hsl_med.l, local_hsl_med.height * local_hsl_med.width, lut);
-    free(lut);
+    histogram_equalization(l_equ, local_hsl_med.l, globalHist, local_hsl_med.height * local_hsl_med.width, 256, img_in.h * img_in.w);
     
     free(local_hsl_med.l);
     local_hsl_med.l = l_equ;
