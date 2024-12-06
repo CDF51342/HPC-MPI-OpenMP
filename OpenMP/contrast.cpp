@@ -22,7 +22,7 @@ timeColor run_cpu_color_test(PPM_IMG img_in);
 timeGray run_cpu_gray_test(PGM_IMG img_in);
 
 const char *obtain_schedule_string(omp_sched_t schedule_type);
-void save_data_csv(char *planning, char *process, char *type, double time, double TotalTime);
+void save_data_csv(const char *planning, const char *process, const char *type, double time, double TotalTime);
 void get_custom_schedule(const char *schedule_str, const char* chunk_str, omp_sched_t *out_schedule_type, int *out_chunk_size);
 
 
@@ -93,7 +93,7 @@ void get_custom_schedule(const char *schedule_str, const char* chunk_str, omp_sc
     *out_chunk_size = atoi(chunk_str);
 }
 
-void save_data_csv(char *planning, char *process, char *type, double time, double TotalTime) {
+void save_data_csv(const char *planning, const char *process, const char *type, double time, double TotalTime) {
     char line[256], path_csv[256];
     FILE *f_csv;
 

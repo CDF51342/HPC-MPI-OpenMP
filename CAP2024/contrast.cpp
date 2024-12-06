@@ -20,7 +20,7 @@ typedef struct {
 timeColor run_cpu_color_test(PPM_IMG img_in);
 timeGray run_cpu_gray_test(PGM_IMG img_in);
 
-void save_data_csv(char *planning, char *process, char *type, double time, double TotalTime);
+void save_data_csv(const char *planning, const char *process, const char *type, double time, double TotalTime);
 
 
 int main(int argc, char *argv[]){
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-void save_data_csv(char *planning, char *process, char *type, double time, double TotalTime) {
+void save_data_csv(const char *planning, const char *process, const char *type, double time, double TotalTime) {
     char line[256], path_csv[256];
     FILE *f_csv;
 
