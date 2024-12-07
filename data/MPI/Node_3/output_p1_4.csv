@@ -1,0 +1,2 @@
+Processes,ReadGray(s),ReadColor(s),Gray(s),Hsl(s),Yuv(s),WriteGray(s),WriteHsl(s),WriteYuv(s),Total(s)
+1,0.031676,0.664487,0.769299,5.738405,2.631716,4.546430,17.418604,18.018639,49.827121
