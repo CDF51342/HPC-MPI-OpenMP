@@ -2,10 +2,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hist-equ.h"
+#include <omp.h>
 #include <mpi.h>
 
 void run_cpu_color_test(PPM_IMG img_in);
 void run_cpu_gray_test(PGM_IMG img_in);
+
+void set_schedule_openmp();
 
 struct Times {
     double ReadTimeGray;
@@ -30,6 +33,7 @@ int main(int argc, char *argv[]){
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+    set_schedule_openmp();
     
     times.TotalTime = MPI_Wtime();
 
@@ -51,8 +55,8 @@ int main(int argc, char *argv[]){
 
     if (rank == 0)
     {
-        printf("Processes;ReadGray(s);ReadColor(s);Gray(s);Hsl(s);Yuv(s);WriteGray(s);WriteHsl(s);WriteYuv(s);Total(s)\n");
-        printf("%d;%f;%f;%f;%f;%f;%f;%f;%f;%f\n", size, times.ReadTimeGray, times.ReadTimeColor, times.GrayTime, times.HslTime, times.YuvTime, times.WriteTimeGray, times.WriteTimeHsl, times.WriteTimeYuv, times.TotalTime);
+        printf("Processes,Num Threads,ReadGray(s),ReadColor(s),Gray(s),Hsl(s),Yuv(s),WriteGray(s),WriteHsl(s),WriteYuv(s),Total(s)\n");
+        printf("%d,%d,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", size, omp_get_max_threads(), times.ReadTimeGray, times.ReadTimeColor, times.GrayTime, times.HslTime, times.YuvTime, times.WriteTimeGray, times.WriteTimeHsl, times.WriteTimeYuv, times.TotalTime);
     }
 
     //Finalize MPI
@@ -91,6 +95,40 @@ void run_cpu_color_test(PPM_IMG img_in)
         free_ppm(img_obuf_yuv);
     }
     
+}
+
+void get_custom_schedule(const char *schedule_str, const char* chunk_str, omp_sched_t *out_schedule_type, int *out_chunk_size)
+{
+    if (strcmp(schedule_str, "static") == 0) {
+        *out_schedule_type = omp_sched_static;
+    } else if (strcmp(schedule_str, "dynamic") == 0) {
+        *out_schedule_type = omp_sched_dynamic;
+    } else if (strcmp(schedule_str, "guided") == 0) {
+        *out_schedule_type = omp_sched_guided;
+    } else if (strcmp(schedule_str, "auto") == 0) {
+        *out_schedule_type = omp_sched_auto;
+    } else {
+        *out_schedule_type = omp_sched_static;
+    }
+
+    *out_chunk_size = atoi(chunk_str);
+}
+
+void set_schedule_openmp() {
+    // Set schedule
+    omp_sched_t schedule_type;
+    int chunk_size;
+
+    const char *schedule_str = getenv("C_OMP_SCHEDULE");
+    const char *chunk_str = getenv("C_OMP_CHUNK_SIZE");
+
+    if (schedule_str == NULL || chunk_str == NULL) {
+        schedule_str = "auto";
+        chunk_str = "0";
+    }
+
+    get_custom_schedule(schedule_str, chunk_str, &schedule_type, &chunk_size);
+    omp_set_schedule(schedule_type, chunk_size);
 }
 
 void run_cpu_gray_test(PGM_IMG img_in)
@@ -225,4 +263,3 @@ void free_pgm(PGM_IMG img)
 {
     free(img.img);
 }
-
