@@ -30,39 +30,49 @@ int main(int argc, char *argv[]){
     PGM_IMG img_ibuf_g;
     PPM_IMG img_ibuf_c;
 
-    //Initialize MPI
+    // Inicializar MPI para medir el tiempo total y otros aspectos paralelos
     MPI_Init(&argc, &argv);
 
+    // Tomar el tiempo de inicio general
     double tstart = MPI_Wtime();
 
+    // Obtener el número de núcleos disponibles en el sistema
     int cores = omp_get_num_procs();
     printf("Number of cores: %d\n", cores);
 
+    // Procesar imágenes en escala de grises
     printf("Running contrast enhancement for gray-scale images.\n");
-    double tstart_read_pgm = MPI_Wtime();
-    img_ibuf_g = read_pgm("./TestFiles/in.pgm");
-    double tend_read_pgm = MPI_Wtime();
+    double tstart_read_pgm = MPI_Wtime(); // Tiempo de inicio de lectura PGM
+    img_ibuf_g = read_pgm("./TestFiles/in.pgm"); // Leer archivo PGM
+    double tend_read_pgm = MPI_Wtime(); // Tiempo al finalizar lectura
 
+    // Ejecutar la mejora de contraste en imágenes en escala de grises
     timeGray t_gray = run_cpu_gray_test(img_ibuf_g);
 
+    // Liberar memoria de la imagen en escala de grises
     free_pgm(img_ibuf_g);
     
+    // Procesar imágenes a color
     printf("Running contrast enhancement for color images.\n");
-    double tstart_read_ppm = MPI_Wtime();
-    img_ibuf_c = read_ppm("./TestFiles/in.ppm");
-    double tend_read_ppm = MPI_Wtime();
+    double tstart_read_ppm = MPI_Wtime(); // Tiempo de inicio de lectura PPM
+    img_ibuf_c = read_ppm("./TestFiles/in.ppm"); // Leer archivo PPM
+    double tend_read_ppm = MPI_Wtime(); // Tiempo al finalizar lectura
 
+    // Ejecutar la mejora de contraste en imágenes a color
     timeColor time_c = run_cpu_color_test(img_ibuf_c);
+
+    // Liberar memoria de la imagen a color
     free_ppm(img_ibuf_c);
     
+    // Tomar el tiempo al finalizar todo el proceso
     double tfinish = MPI_Wtime();
     double TotalTime = tfinish - tstart;
     printf("Total time: %f\n", TotalTime);
 
-    //Finalize MPI
+    // Finalizar MPI
     MPI_Finalize();
 
-    // Save data time in csv
+    // Guardar datos de tiempo en un archivo CSV
     save_data_csv("OpenMP", "gray", "read-pgm", tend_read_pgm - tstart_read_pgm, TotalTime);
     save_data_csv("OpenMP", "gray", "G", t_gray.time_test, TotalTime);
     save_data_csv("OpenMP", "gray", "write-pgm", t_gray.time_write, TotalTime);
@@ -78,6 +88,7 @@ int main(int argc, char *argv[]){
 
 void get_custom_schedule(const char *schedule_str, const char* chunk_str, omp_sched_t *out_schedule_type, int *out_chunk_size)
 {
+    // Configura el tipo de planificación (schedule) y el tamaño de chunk para OpenMP
     if (strcmp(schedule_str, "static") == 0) {
         *out_schedule_type = omp_sched_static;
     } else if (strcmp(schedule_str, "dynamic") == 0) {
@@ -127,6 +138,7 @@ void save_data_csv(const char *planning, const char *process, const char *type, 
 }
 
 const char *obtain_schedule_string(omp_sched_t schedule_type) {
+    // Devuelve el nombre del tipo de planificación en formato de cadena
     switch (schedule_type) {
         case omp_sched_static:
             return "static";
@@ -137,39 +149,43 @@ const char *obtain_schedule_string(omp_sched_t schedule_type) {
         case omp_sched_auto:
             return "auto";
         default:
-            return "unknown";
+            return "unknown"; // Tipo desconocido
     }
 }
 
-timeColor run_cpu_color_test(PPM_IMG img_in)
-{
+timeColor run_cpu_color_test(PPM_IMG img_in) {
     PPM_IMG img_obuf_hsl, img_obuf_yuv;
     timeColor times;
     
     printf("Starting CPU processing...\n");
     
+    // Procesar imagen en espacio de color HSL
     double tstart = MPI_Wtime();
     img_obuf_hsl = contrast_enhancement_c_hsl(img_in);
     double tfinish = MPI_Wtime();
     printf("HSL processing time: %f (s)\n", tfinish - tstart);
     times.time_hsl = tfinish - tstart;
-    
+
+    // Guardar imagen procesada en HSL
     tstart = MPI_Wtime();
     write_ppm(img_obuf_hsl, "out_hsl.ppm");
     tfinish = MPI_Wtime();
     times.time_write_hsl = tfinish - tstart;
 
+    // Procesar imagen en espacio de color YUV
     tstart = MPI_Wtime();
     img_obuf_yuv = contrast_enhancement_c_yuv(img_in);
     tfinish = MPI_Wtime();
     printf("YUV processing time: %f (s)\n", tfinish - tstart);
     times.time_yuv = tfinish - tstart;
-    
+
+    // Guardar imagen procesada en YUV
     tstart = MPI_Wtime();
     write_ppm(img_obuf_yuv, "out_yuv.ppm");
     tfinish = MPI_Wtime();
     times.time_write_yuv = tfinish - tstart;
-    
+
+    // Liberar memoria de las imágenes procesadas
     free_ppm(img_obuf_hsl);
     free_ppm(img_obuf_yuv);
 
@@ -178,7 +194,7 @@ timeColor run_cpu_color_test(PPM_IMG img_in)
 
 
 void set_schedule_openmp(int size) {
-    // Set schedule
+    // Configurar la planificación de OpenMP basada en variables de entorno
     omp_sched_t schedule_type;
     int chunk_size;
 
@@ -220,27 +236,30 @@ void set_schedule_openmp(int size) {
     omp_set_schedule(schedule_type, chunk_size);
 }
 
-timeGray run_cpu_gray_test(PGM_IMG img_in)
-{
+timeGray run_cpu_gray_test(PGM_IMG img_in) {
     PGM_IMG img_obuf;  
     timeGray t_gray;
 
+    // Configurar planificación para OpenMP basada en la imagen
     set_schedule_openmp(img_in.w * img_in.h);
 
     printf("Starting CPU processing...\n");
     
+    // Procesar imagen en escala de grises
     double tstart = MPI_Wtime();
     img_obuf = contrast_enhancement_g(img_in);
     double tfinish = MPI_Wtime();
     t_gray.time_test = tfinish - tstart;
 
     printf("Processing time: %f (s)\n", t_gray.time_test);
-    
+
+    // Guardar imagen procesada
     tstart = MPI_Wtime();
     write_pgm(img_obuf, "out.pgm");
     tfinish = MPI_Wtime();
     t_gray.time_write = tfinish - tstart;
-    free_pgm(img_obuf);
+
+    free_pgm(img_obuf); // Liberar memoria de la imagen procesada
 
     return t_gray;
 }

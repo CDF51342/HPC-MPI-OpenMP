@@ -5,86 +5,124 @@
 
 PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
 {
-    PGM_IMG result;
-    int hist[256];
-    
+    PGM_IMG result; // Imagen de salida
+    int hist[256];  // Histograma para la imagen en escala de grises (256 niveles)
+
+    // Inicializar las dimensiones de la imagen de salida
     result.w = img_in.w;
     result.h = img_in.h;
+
+    // Reservar memoria para la imagen de salida
     result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    
+
+    // Calcular el histograma de la imagen de entrada
     histogram(hist, img_in.img, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img,img_in.img,hist,result.w*result.h, 256);
+
+    // Aplicar ecualización del histograma a la imagen de entrada
+    histogram_equalization(result.img, img_in.img, hist, result.w * result.h, 256);
+
+    // Retornar la imagen con contraste mejorado
     return result;
 }
 
 PPM_IMG contrast_enhancement_c_rgb(PPM_IMG img_in)
 {
-    PPM_IMG result;
-    int hist[256];
-    
+    PPM_IMG result; // Imagen de salida
+    int hist[256];  // Histograma para cada canal de color (R, G, B)
+
+    // Inicializar las dimensiones de la imagen de salida
     result.w = img_in.w;
     result.h = img_in.h;
+
+    // Reservar memoria para los canales de color de la imagen de salida
     result.img_r = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    
-    histogram(hist, img_in.img_r, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_r,img_in.img_r,hist,result.w*result.h, 256);
-    histogram(hist, img_in.img_g, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_g,img_in.img_g,hist,result.w*result.h, 256);
-    histogram(hist, img_in.img_b, img_in.h * img_in.w, 256);
-    histogram_equalization(result.img_b,img_in.img_b,hist,result.w*result.h, 256);
 
+    // Calcular el histograma y aplicar ecualización del histograma para el canal rojo
+    histogram(hist, img_in.img_r, img_in.h * img_in.w, 256);
+    histogram_equalization(result.img_r, img_in.img_r, hist, result.w * result.h, 256);
+
+    // Repetir el proceso para el canal verde
+    histogram(hist, img_in.img_g, img_in.h * img_in.w, 256);
+    histogram_equalization(result.img_g, img_in.img_g, hist, result.w * result.h, 256);
+
+    // Repetir el proceso para el canal azul
+    histogram(hist, img_in.img_b, img_in.h * img_in.w, 256);
+    histogram_equalization(result.img_b, img_in.img_b, hist, result.w * result.h, 256);
+
+    // Retornar la imagen con contraste mejorado para cada canal
     return result;
 }
 
 
 PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
 {
-    YUV_IMG yuv_med;
-    PPM_IMG result;
-    
-    unsigned char * y_equ;
-    int hist[256];
-    
-    yuv_med = rgb2yuv(img_in);
-    y_equ = (unsigned char *)malloc(yuv_med.h*yuv_med.w*sizeof(unsigned char));
-    
-    histogram(hist, yuv_med.img_y, yuv_med.h * yuv_med.w, 256);
-    histogram_equalization(y_equ,yuv_med.img_y,hist,yuv_med.h * yuv_med.w, 256);
+    YUV_IMG yuv_med;       // Imagen intermedia en espacio de color YUV
+    PPM_IMG result;        // Imagen de salida
+    unsigned char *y_equ;  // Canal Y (luminancia) ecualizado
+    int hist[256];         // Histograma para el canal Y
 
+    // Convertir la imagen de entrada de RGB a YUV
+    yuv_med = rgb2yuv(img_in);
+
+    // Reservar memoria para el canal Y ecualizado
+    y_equ = (unsigned char *)malloc(yuv_med.h * yuv_med.w * sizeof(unsigned char));
+
+    // Calcular el histograma del canal Y
+    histogram(hist, yuv_med.img_y, yuv_med.h * yuv_med.w, 256);
+
+    // Aplicar ecualización del histograma al canal Y
+    histogram_equalization(y_equ, yuv_med.img_y, hist, yuv_med.h * yuv_med.w, 256);
+
+    // Reemplazar el canal Y original por el ecualizado
     free(yuv_med.img_y);
     yuv_med.img_y = y_equ;
-    
+
+    // Convertir la imagen intermedia de YUV de regreso a RGB
     result = yuv2rgb(yuv_med);
+
+    // Liberar memoria utilizada por los canales Y, U, y V
     free(yuv_med.img_y);
     free(yuv_med.img_u);
     free(yuv_med.img_v);
-    
+
+    // Retornar la imagen con contraste mejorado
     return result;
 }
 
 PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
 {
-    HSL_IMG hsl_med;
-    PPM_IMG result;
-    
-    unsigned char * l_equ;
-    int hist[256];
+    HSL_IMG hsl_med;       // Imagen intermedia en espacio de color HSL
+    PPM_IMG result;        // Imagen de salida
+    unsigned char *l_equ;  // Canal L (luminancia) ecualizado
+    int hist[256];         // Histograma para el canal L
 
+    // Convertir la imagen de entrada de RGB a HSL
     hsl_med = rgb2hsl(img_in);
-    l_equ = (unsigned char *)malloc(hsl_med.height*hsl_med.width*sizeof(unsigned char));
 
+    // Reservar memoria para el canal L ecualizado
+    l_equ = (unsigned char *)malloc(hsl_med.height * hsl_med.width * sizeof(unsigned char));
+
+    // Calcular el histograma del canal L
     histogram(hist, hsl_med.l, hsl_med.height * hsl_med.width, 256);
-    histogram_equalization(l_equ, hsl_med.l,hist,hsl_med.width*hsl_med.height, 256);
-    
+
+    // Aplicar ecualización del histograma al canal L
+    histogram_equalization(l_equ, hsl_med.l, hist, hsl_med.width * hsl_med.height, 256);
+
+    // Reemplazar el canal L original por el ecualizado
     free(hsl_med.l);
     hsl_med.l = l_equ;
 
+    // Convertir la imagen intermedia de HSL de regreso a RGB
     result = hsl2rgb(hsl_med);
+
+    // Liberar memoria utilizada por los canales H, S, y L
     free(hsl_med.h);
     free(hsl_med.s);
     free(hsl_med.l);
+
+    // Retornar la imagen con contraste mejorado
     return result;
 }
 

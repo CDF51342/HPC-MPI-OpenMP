@@ -37,69 +37,86 @@ PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
     return result;
 }
 
-PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
-{
-    YUV_IMG local_yuv_med;
-    PPM_IMG local_result;
-    PPM_IMG result;
-    PPM_IMG local_img_in;
-    
-    unsigned char * y_equ;
-    int localHist[256];
-    int globalHist[256];
+PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in) {
+    // Estructuras para manejar imágenes
+    YUV_IMG local_yuv_med;  // Imagen en espacio de color YUV (local)
+    PPM_IMG local_result;   // Resultado del procesamiento local
+    PPM_IMG result;         // Resultado final que será reunido por el proceso maestro
+    PPM_IMG local_img_in;   // Imagen local procesada en cada proceso
 
+    // Variables para histogramas y cálculos
+    unsigned char *y_equ;   // Canal de luminancia ajustado (igualado)
+    int localHist[256];     // Histograma local
+    int globalHist[256];    // Histograma global (combinado)
+
+    // Información sobre los procesos MPI
     int size, rank;
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size); // Número total de procesos
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Rango del proceso actual
 
-    int local_width = img_in.w;
-    int local_height = img_in.h / size;
-    int remainder = img_in.h % size;
-    int local_size = local_width * local_height;
+    // Dividir la imagen en segmentos para los procesos
+    int local_width = img_in.w;            // Ancho de la imagen (igual para todos los procesos)
+    int local_height = img_in.h / size;    // Altura dividida entre procesos
+    int remainder = img_in.h % size;       // Resto de la división
+    int local_size = local_width * local_height; // Tamaño del segmento local
 
-    // Adjust the local height for the last process to handle the remainder
+    // Ajustar la altura para el último proceso (manejo del resto)
     if (rank == size - 1) {
-        local_height += remainder;
+        local_height += remainder;        // Añadir el resto a la altura local
         local_size = local_width * local_height;
     }
 
+    // Asignar memoria para las partes locales de la imagen
     local_img_in.img_r = (unsigned char *)malloc(local_size * sizeof(unsigned char));
     local_img_in.img_g = (unsigned char *)malloc(local_size * sizeof(unsigned char));
     local_img_in.img_b = (unsigned char *)malloc(local_size * sizeof(unsigned char));
     local_img_in.w = local_width;
     local_img_in.h = local_height;
 
-    // Scatter the image data
-    int *sendcounts = (int *)malloc(size * sizeof(int));
-    int *displs = (int *)malloc(size * sizeof(int));
+    // Preparar las estructuras para Scatterv (distribuir partes de la imagen)
+    int *sendcounts = (int *)malloc(size * sizeof(int)); // Tamaños de los datos enviados
+    int *displs = (int *)malloc(size * sizeof(int));     // Desplazamientos en el buffer de entrada
     for (int i = 0; i < size; i++) {
-        sendcounts[i] = (img_in.h / size) * img_in.w;
+        sendcounts[i] = (img_in.h / size) * img_in.w;    // Tamaño estándar para cada proceso
         if (i == size - 1) {
-            sendcounts[i] += remainder * img_in.w;
+            sendcounts[i] += remainder * img_in.w;      // Ajustar para el último proceso
         }
-        displs[i] = i * (img_in.h / size) * img_in.w;
+        displs[i] = i * (img_in.h / size) * img_in.w;   // Desplazamiento para cada proceso
     }
 
+    // Distribuir los canales R, G y B de la imagen de entrada
     MPI_Scatterv(img_in.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_r, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Scatterv(img_in.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_g, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Scatterv(img_in.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_b, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
+    // Convertir la imagen local de RGB a YUV
     local_yuv_med = rgb2yuv(local_img_in);
+
+    // Asignar memoria para la luminancia ajustada
     y_equ = (unsigned char *)malloc(local_yuv_med.h * local_yuv_med.w * sizeof(unsigned char));
 
+    // Calcular el histograma local para el canal de luminancia (Y)
     histogram(localHist, local_yuv_med.img_y, local_yuv_med.h * local_yuv_med.w, 256);
+
+    // Reducir (sumar) los histogramas locales en un histograma global
     MPI_Allreduce(localHist, globalHist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
+    // Realizar la igualación del histograma en el canal de luminancia
     histogram_equalization(y_equ, local_yuv_med.img_y, globalHist, local_yuv_med.h * local_yuv_med.w, 256, img_in.h * img_in.w);
-    
+
+    // Reemplazar el canal de luminancia en la imagen YUV con la versión igualada
     free(local_yuv_med.img_y);
     local_yuv_med.img_y = y_equ;
 
+    // Convertir la imagen YUV de nuevo a RGB
     local_result = yuv2rgb(local_yuv_med);
+
+    // Liberar los canales U, V e Y de la imagen YUV local
     free(local_yuv_med.img_u);
     free(local_yuv_med.img_v);
     free(local_yuv_med.img_y);
 
+    // Asignar memoria para la imagen final en el proceso maestro (rank 0)
     if (rank == 0) {
         result.w = img_in.w;
         result.h = img_in.h;
@@ -108,10 +125,12 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
         result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     }
 
+    // Recolectar las partes procesadas de cada proceso en la imagen final
     MPI_Gatherv(local_result.img_r, local_size, MPI_UNSIGNED_CHAR, result.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Gatherv(local_result.img_g, local_size, MPI_UNSIGNED_CHAR, result.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Gatherv(local_result.img_b, local_size, MPI_UNSIGNED_CHAR, result.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
+    // Liberar memoria utilizada en cada proceso
     free(local_result.img_r);
     free(local_result.img_g);
     free(local_result.img_b);
@@ -121,72 +140,89 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in)
     free(sendcounts);
     free(displs);
 
+    // Devolver el resultado final (solo el proceso maestro tendrá los datos completos)
     return result;
 }
 
-PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
-{
-    HSL_IMG local_hsl_med;
-    PPM_IMG local_result;
-    PPM_IMG result;
-    PPM_IMG local_img_in;
-    
-    unsigned char * l_equ;
-    int localHist[256];
-    int globalHist[256];
+PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in) {
+    // Estructuras para manejar imágenes
+    HSL_IMG local_hsl_med; // Imagen en espacio de color HSL (local)
+    PPM_IMG local_result;  // Resultado del procesamiento local
+    PPM_IMG result;        // Resultado final que será reunido por el proceso maestro
+    PPM_IMG local_img_in;  // Imagen local procesada en cada proceso
+
+    // Variables para histogramas y otros cálculos
+    unsigned char *l_equ;   // Canal de luminancia ajustado (igualado)
+    int localHist[256];     // Histograma local
+    int globalHist[256];    // Histograma global
 
     int size, rank;
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size); // Número total de procesos
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Rango del proceso actual
 
+    // Dimensiones de la imagen local
     int local_width = img_in.w;
-    int local_height = img_in.h / size;
-    int remainder = img_in.h % size;
+    int local_height = img_in.h / size; // Dividir la altura entre los procesos
+    int remainder = img_in.h % size;    // Resto de la división para el último proceso
     int local_size = local_width * local_height;
 
-    // Adjust the local height for the last process to handle the remainder
+    // Ajustar la altura local para el último proceso (manejo del resto)
     if (rank == size - 1) {
         local_height += remainder;
         local_size = local_width * local_height;
     }
 
+    // Asignar memoria para las partes locales de la imagen
     local_img_in.img_r = (unsigned char *)malloc(local_size * sizeof(unsigned char));
     local_img_in.img_g = (unsigned char *)malloc(local_size * sizeof(unsigned char));
     local_img_in.img_b = (unsigned char *)malloc(local_size * sizeof(unsigned char));
     local_img_in.w = local_width;
     local_img_in.h = local_height;
 
-    // Scatter the image data
-    int *sendcounts = (int *)malloc(size * sizeof(int));
-    int *displs = (int *)malloc(size * sizeof(int));
+    // Preparar las estructuras para Scatterv (distribuir partes de la imagen entre procesos)
+    int *sendcounts = (int *)malloc(size * sizeof(int)); // Tamaño de los datos enviados a cada proceso
+    int *displs = (int *)malloc(size * sizeof(int));     // Desplazamientos en el buffer de origen
     for (int i = 0; i < size; i++) {
-        sendcounts[i] = (img_in.h / size) * img_in.w;
+        sendcounts[i] = (img_in.h / size) * img_in.w; // Tamaño estándar
         if (i == size - 1) {
-            sendcounts[i] += remainder * img_in.w;
+            sendcounts[i] += remainder * img_in.w; // Agregar el resto al último proceso
         }
-        displs[i] = i * (img_in.h / size) * img_in.w;
+        displs[i] = i * (img_in.h / size) * img_in.w; // Desplazamiento de cada segmento
     }
 
+    // Distribuir los canales R, G y B de la imagen de entrada entre los procesos
     MPI_Scatterv(img_in.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_r, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Scatterv(img_in.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_g, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Scatterv(img_in.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, local_img_in.img_b, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
+    // Convertir la imagen local de RGB a HSL
     local_hsl_med = rgb2hsl(local_img_in);
+
+    // Asignar memoria para la luminancia ajustada
     l_equ = (unsigned char *)malloc(local_hsl_med.height * local_hsl_med.width * sizeof(unsigned char));
 
+    // Calcular el histograma local de la luminancia
     histogram(localHist, local_hsl_med.l, local_hsl_med.height * local_hsl_med.width, 256);
+
+    // Reducir (sumar) los histogramas locales en un histograma global
     MPI_Allreduce(localHist, globalHist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
+    // Realizar la igualación del histograma en el canal de luminancia
     histogram_equalization(l_equ, local_hsl_med.l, globalHist, local_hsl_med.height * local_hsl_med.width, 256, img_in.h * img_in.w);
-    
+
+    // Reemplazar el canal de luminancia en la imagen HSL con la versión igualada
     free(local_hsl_med.l);
     local_hsl_med.l = l_equ;
 
+    // Convertir la imagen HSL de nuevo a RGB
     local_result = hsl2rgb(local_hsl_med);
+
+    // Liberar los canales de HSL ya no necesarios
     free(local_hsl_med.h);
     free(local_hsl_med.s);
     free(local_hsl_med.l);
 
+    // Asignar memoria para la imagen final en el proceso maestro (rank 0)
     if (rank == 0) {
         result.w = img_in.w;
         result.h = img_in.h;
@@ -195,10 +231,12 @@ PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
         result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     }
 
+    // Recolectar las partes procesadas de cada proceso en la imagen final
     MPI_Gatherv(local_result.img_r, local_size, MPI_UNSIGNED_CHAR, result.img_r, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Gatherv(local_result.img_g, local_size, MPI_UNSIGNED_CHAR, result.img_g, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
     MPI_Gatherv(local_result.img_b, local_size, MPI_UNSIGNED_CHAR, result.img_b, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
+    // Liberar memoria local utilizada en cada proceso
     free(local_result.img_r);
     free(local_result.img_g);
     free(local_result.img_b);
@@ -208,6 +246,7 @@ PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in)
     free(sendcounts);
     free(displs);
 
+    // Devolver el resultado final al proceso maestro
     return result;
 }
 

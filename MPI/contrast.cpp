@@ -21,95 +21,102 @@ struct Times {
 
 Times times;
 
-int main(int argc, char *argv[]){
-    PGM_IMG img_ibuf_g;
-    PPM_IMG img_ibuf_c;
+int main(int argc, char *argv[]) {
+    PGM_IMG img_ibuf_g; // Estructura para almacenar una imagen en escala de grises
+    PPM_IMG img_ibuf_c; // Estructura para almacenar una imagen en color
 
-    //Initialize MPI
+    // Inicializar el entorno de MPI
     MPI_Init(&argc, &argv);
     int rank, size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Obtener el identificador del proceso actual
+    MPI_Comm_size(MPI_COMM_WORLD, &size); // Obtener el número total de procesos
+
+    // Iniciar el cronómetro general
     times.TotalTime = MPI_Wtime();
 
+    // Leer la imagen en escala de grises y medir el tiempo que toma
     times.ReadTimeGray = MPI_Wtime();
     img_ibuf_g = read_pgm("./TestFiles/in.pgm");
     times.ReadTimeGray = MPI_Wtime() - times.ReadTimeGray;
 
+    // Realizar el procesamiento en escala de grises
     run_cpu_gray_test(img_ibuf_g);
-    free_pgm(img_ibuf_g);
-    
+    free_pgm(img_ibuf_g); // Liberar memoria utilizada por la imagen en escala de grises
+
+    // Leer la imagen en color y medir el tiempo que toma
     times.ReadTimeColor = MPI_Wtime();
     img_ibuf_c = read_ppm("./TestFiles/in.ppm");
     times.ReadTimeColor = MPI_Wtime() - times.ReadTimeColor;
 
+    // Realizar el procesamiento en color
     run_cpu_color_test(img_ibuf_c);
-    free_ppm(img_ibuf_c);
-    
+    free_ppm(img_ibuf_c); // Liberar memoria utilizada por la imagen en color
+
+    // Finalizar el cronómetro general
     times.TotalTime = MPI_Wtime() - times.TotalTime;
 
-    if (rank == 0)
-    {
-        printf("Processes,ReadGray(s),ReadColor(s),Gray(s),Hsl(s),Yuv(s),WriteGray(s),WriteHsl(s),WriteYuv(s),Total(s)\n"),
+    // El proceso con rank 0 escribe los resultados en la consola
+    if (rank == 0) {
+        printf("Processes,ReadGray(s),ReadColor(s),Gray(s),Hsl(s),Yuv(s),WriteGray(s),WriteHsl(s),WriteYuv(s),Total(s)\n");
         printf("%d,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", size, times.ReadTimeGray, times.ReadTimeColor, times.GrayTime, times.HslTime, times.YuvTime, times.WriteTimeGray, times.WriteTimeHsl, times.WriteTimeYuv, times.TotalTime);
     }
 
-    //Finalize MPI
+    // Finalizar el entorno de MPI
     MPI_Finalize();
     return 0;
 }
 
-void run_cpu_color_test(PPM_IMG img_in)
-{
-    PPM_IMG img_obuf_hsl, img_obuf_yuv;
+// Función para procesar imágenes en color
+void run_cpu_color_test(PPM_IMG img_in) {
+    PPM_IMG img_obuf_hsl, img_obuf_yuv; // Buffers para las imágenes procesadas en los espacios de color HSL y YUV
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    
-    
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Obtener el identificador del proceso actual
+
+    // Procesar la imagen en el espacio de color HSL y medir el tiempo que toma
     times.HslTime = MPI_Wtime();
     img_obuf_hsl = contrast_enhancement_c_hsl(img_in);
     times.HslTime = MPI_Wtime() - times.HslTime;
-    
-    if(rank == 0)
-    {
+
+    // Si el proceso actual es el maestro (rank 0), escribir la imagen procesada en HSL a un archivo
+    if (rank == 0) {
         times.WriteTimeHsl = MPI_Wtime();
         write_ppm(img_obuf_hsl, "out_hsl.ppm");
         times.WriteTimeHsl = MPI_Wtime() - times.WriteTimeHsl;
-        free_ppm(img_obuf_hsl);
+        free_ppm(img_obuf_hsl); // Liberar memoria utilizada por la imagen procesada
     }
 
+    // Procesar la imagen en el espacio de color YUV y medir el tiempo que toma
     times.YuvTime = MPI_Wtime();
     img_obuf_yuv = contrast_enhancement_c_yuv(img_in);
     times.YuvTime = MPI_Wtime() - times.YuvTime;
 
-    if(rank == 0)
-    {
+    // Si el proceso actual es el maestro (rank 0), escribir la imagen procesada en YUV a un archivo
+    if (rank == 0) {
         times.WriteTimeYuv = MPI_Wtime();
         write_ppm(img_obuf_yuv, "out_yuv.ppm");
         times.WriteTimeYuv = MPI_Wtime() - times.WriteTimeYuv;
-        free_ppm(img_obuf_yuv);
+        free_ppm(img_obuf_yuv); // Liberar memoria utilizada por la imagen procesada
     }
-    
 }
 
-void run_cpu_gray_test(PGM_IMG img_in)
-{
-    PGM_IMG img_obuf;
-    
+// Función para procesar imágenes en escala de grises
+void run_cpu_gray_test(PGM_IMG img_in) {
+    PGM_IMG img_obuf; // Buffer para la imagen procesada
+
+    // Procesar la imagen en escala de grises y medir el tiempo que toma
     times.GrayTime = MPI_Wtime();
     img_obuf = contrast_enhancement_g(img_in);
     times.GrayTime = MPI_Wtime() - times.GrayTime;
 
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Obtener el identificador del proceso actual
 
-    if(rank == 0)
-    {
+    // Si el proceso actual es el maestro (rank 0), escribir la imagen procesada a un archivo
+    if (rank == 0) {
         times.WriteTimeGray = MPI_Wtime();
         write_pgm(img_obuf, "out.pgm");
         times.WriteTimeGray = MPI_Wtime() - times.WriteTimeGray;
-        free_pgm(img_obuf);
+        free_pgm(img_obuf); // Liberar memoria utilizada por la imagen procesada
     }
 }
 
