@@ -1,0 +1,5 @@
+Label,ReadGray,ReadColor,Gray,Hsl,Yuv,WriteGray,WriteHsl,WriteYuv,Total,Amdhal
+Sequential,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0
+"MPI: N 1, Prc 4",0.8031,0.94,3.1309,3.4403,3.3642,1.007,1.0038,1.0428,1.3447,1.2341
+"OpenMP: Threads 16, Schedule guided, ChunkSize 64",1.0408,3.6046,1.7478,5.2297,3.6067,0.9989,1.0512,1.0963,1.4472,4.7786
+"MPI+OpenMP: N 1, Prc 4, Threads 16",0.7866,3.2593,3.9564,6.2692,4.7356,0.9694,1.0492,1.0891,1.4702,5.0656
