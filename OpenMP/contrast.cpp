@@ -43,7 +43,7 @@ int main(int argc, char *argv[]){
     // Procesar imágenes en escala de grises
     printf("Running contrast enhancement for gray-scale images.\n");
     double tstart_read_pgm = MPI_Wtime(); // Tiempo de inicio de lectura PGM
-    img_ibuf_g = read_pgm("./TestFiles/in.pgm"); // Leer archivo PGM
+    img_ibuf_g = read_pgm("in.pgm"); // Leer archivo PGM
     double tend_read_pgm = MPI_Wtime(); // Tiempo al finalizar lectura
 
     // Ejecutar la mejora de contraste en imágenes en escala de grises
@@ -55,7 +55,7 @@ int main(int argc, char *argv[]){
     // Procesar imágenes a color
     printf("Running contrast enhancement for color images.\n");
     double tstart_read_ppm = MPI_Wtime(); // Tiempo de inicio de lectura PPM
-    img_ibuf_c = read_ppm("./TestFiles/in.ppm"); // Leer archivo PPM
+    img_ibuf_c = read_ppm("in.ppm"); // Leer archivo PPM
     double tend_read_ppm = MPI_Wtime(); // Tiempo al finalizar lectura
 
     // Ejecutar la mejora de contraste en imágenes a color

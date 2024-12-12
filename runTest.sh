@@ -6,6 +6,12 @@
 #SBATCH --time=01:00:00
 #SBATCH --partition=compute
 
+# Check if in.pgm and in.ppm files exist
+if [ ! -f "./in.pgm" ] || [ ! -f "./in.ppm" ]; then
+    echo -e "\e[31m✘\e[0m Error: in.pgm or in.ppm files not found, execute generateInputFiles.sh first"
+    exit 1
+fi
+
 versions=("OpenMP" "MPI" "MPI+OpenMP")
 
 echo "=================================================================="
@@ -26,10 +32,11 @@ fi
 
 rm ./out* -f
 
+
 # Check if images_seq directory exists
 if [ ! -d "./images_seq" ]; then
     printf "Executing sequential version...\n"
-    mpirun -np 1 ./CAP2024/build/contrast
+    mpirun -np 1 ./Sequential/build/contrast
     # Save the output of the sequential version to check the parallel versions
     mkdir images_seq
     mv ./out* ./images_seq
@@ -56,7 +63,7 @@ run_mpi_openmp() {
 
 # check the difference between the sequential and parallel versions
 check_output_difference() {
-    echo "==================================="
+    echo "=================================================================="
     version=${versions[$1]}
     echo "Checking output difference for $version version..."
     passed=true
@@ -71,7 +78,7 @@ check_output_difference() {
         echo -e "\e[32m✔\e[0m $version version passed!"
         passed_versions[$1]="1"
     fi
-    echo "==================================="
+    echo "=================================================================="
 }
 
 passed_versions=("0" "0" "0")
@@ -94,7 +101,7 @@ fi
 if [ -z "$1" ]; then
     # Summary of passed versions
     echo "Summary of passed versions:"
-    echo "==================================="
+    echo "=================================================================="
     for i in "${!versions[@]}"; do
         version=${versions[$i]}
         if [ "${passed_versions[$i]}" == "0" ]; then
@@ -103,5 +110,9 @@ if [ -z "$1" ]; then
             echo -e "\e[32m✔\e[0m $version version passed!"
         fi
     done
-    echo "==================================="
+    echo "=================================================================="
 fi
+
+echo "Cleaning up..."
+rm ./out* -f
+echo "Finish!"

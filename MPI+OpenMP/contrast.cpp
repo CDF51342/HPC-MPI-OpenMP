@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
 
     // Leer la imagen en escala de grises y medir el tiempo necesario
     times.ReadTimeGray = MPI_Wtime();
-    img_ibuf_g = read_pgm("./TestFiles/in.pgm"); // Leer archivo PGM
+    img_ibuf_g = read_pgm("in.pgm"); // Leer archivo PGM
     times.ReadTimeGray = MPI_Wtime() - times.ReadTimeGray;
 
     // Procesar la imagen en escala de grises
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
 
     // Leer la imagen a color y medir el tiempo necesario
     times.ReadTimeColor = MPI_Wtime();
-    img_ibuf_c = read_ppm("./TestFiles/in.ppm"); // Leer archivo PPM
+    img_ibuf_c = read_ppm("in.ppm"); // Leer archivo PPM
     times.ReadTimeColor = MPI_Wtime() - times.ReadTimeColor;
 
     // Procesar la imagen a color

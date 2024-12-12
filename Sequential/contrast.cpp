@@ -34,7 +34,7 @@ int main(int argc, char *argv[]){
 
     printf("Running contrast enhancement for gray-scale images.\n");
     double tstart_read_pgm = MPI_Wtime();
-    img_ibuf_g = read_pgm("./TestFiles/in.pgm");
+    img_ibuf_g = read_pgm("in.pgm");
     double tend_read_pgm = MPI_Wtime();
 
     timeGray t_gray = run_cpu_gray_test(img_ibuf_g);
@@ -43,7 +43,7 @@ int main(int argc, char *argv[]){
     
     printf("Running contrast enhancement for color images.\n");
     double tstart_read_ppm = MPI_Wtime();
-    img_ibuf_c = read_ppm("./TestFiles/in.ppm");
+    img_ibuf_c = read_ppm("in.ppm");
     double tend_read_ppm = MPI_Wtime();
 
     timeColor time_c = run_cpu_color_test(img_ibuf_c);

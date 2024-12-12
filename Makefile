@@ -1,5 +1,5 @@
 # Define project directories
-PROJECT1_DIR = ./CAP2024
+PROJECT1_DIR = ./Sequential
 PROJECT2_DIR = ./MPI
 PROJECT3_DIR = ./MPI+OpenMP
 PROJECT4_DIR = ./OpenMP
