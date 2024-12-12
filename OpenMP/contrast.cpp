@@ -267,6 +267,7 @@ timeGray run_cpu_gray_test(PGM_IMG img_in) {
 
 
 PPM_IMG read_ppm(const char * path){
+    // Aplicamos paralelización mediante omp en la lectura en imágenes de color
     FILE * in_file;
     char sbuf[256];
     
@@ -294,14 +295,16 @@ PPM_IMG read_ppm(const char * path){
     result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     ibuf         = (char *)malloc(3 * result.w * result.h * sizeof(char));
 
-    
+    // Leemos todos los datos de la imagen desde el archivo.
+    // Los datos están organizados como una secuencia de valores RGB intercalados.
     fread(ibuf,sizeof(unsigned char), 3 * result.w*result.h, in_file);
 
+    // Paralelizamos la separación de los canales R, G y B utilizando OpenMP.
     #pragma omp parallel for schedule(runtime)
     for(i = 0; i < result.w*result.h; i ++){
-        result.img_r[i] = ibuf[3*i + 0];
-        result.img_g[i] = ibuf[3*i + 1];
-        result.img_b[i] = ibuf[3*i + 2];
+        result.img_r[i] = ibuf[3*i + 0]; //Extraemos el componente rojo
+        result.img_g[i] = ibuf[3*i + 1]; //Extraemos el componente verde
+        result.img_b[i] = ibuf[3*i + 2]; //Extraemos el componente azul
     }
     
     fclose(in_file);
@@ -311,16 +314,18 @@ PPM_IMG read_ppm(const char * path){
 }
 
 void write_ppm(PPM_IMG img, const char * path){
+    // Se paraleliza la organización de los datos de los canales R, G y B en un solo buffer intercalado.
     FILE * out_file;
     int i;
     
     char * obuf = (char *)malloc(3 * img.w * img.h * sizeof(char));
 
+     // Paralelizamos la construcción del buffer intercalado utilizando OpenMP.
     #pragma omp parallel for schedule(runtime)
     for(i = 0; i < img.w*img.h; i ++){
-        obuf[3*i + 0] = img.img_r[i];
-        obuf[3*i + 1] = img.img_g[i];
-        obuf[3*i + 2] = img.img_b[i];
+        obuf[3*i + 0] = img.img_r[i]; // Canal rojo
+        obuf[3*i + 1] = img.img_g[i]; // Canal verde
+        obuf[3*i + 2] = img.img_b[i]; // Canal azul
     }
     out_file = fopen(path, "wb");
     fprintf(out_file, "P6\n");

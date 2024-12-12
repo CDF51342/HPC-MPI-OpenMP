@@ -263,31 +263,38 @@ HSL_IMG rgb2hsl(PPM_IMG img_in)
     img_out.s = (float *)malloc(img_in.w * img_in.h * sizeof(float));
     img_out.l = (unsigned char *)malloc(img_in.w * img_in.h * sizeof(unsigned char));
     
+    // Inicia la paralelización del bucle for utilizando OpenMP. 
+    // 1. `private(H, S, L)`: Cada hilo tendrá sus propias copias de las variables H, S y L, evitando conflictos entre hilos.
+    // 2. `schedule(runtime)`: El esquema de distribución de las iteraciones se puede configurar en tiempo de ejecución 
+    //    mediante la variable de entorno OMP_SCHEDULE (por ejemplo, static, dynamic, etc.).
     #pragma omp parallel for private(H, S, L) schedule(runtime)
     for(i = 0; i < img_in.w*img_in.h; i ++){
         
-        float var_r = ( (float)img_in.img_r[i]/255 );//Convert RGB to [0,1]
+        float var_r = ( (float)img_in.img_r[i]/255 );//Convertimos RGB a [0,1]
         float var_g = ( (float)img_in.img_g[i]/255 );
         float var_b = ( (float)img_in.img_b[i]/255 );
         float var_min = (var_r < var_g) ? var_r : var_g;
-        var_min = (var_min < var_b) ? var_min : var_b;   //min. value of RGB
+        var_min = (var_min < var_b) ? var_min : var_b;   //mínimo de RGB
         float var_max = (var_r > var_g) ? var_r : var_g;
-        var_max = (var_max > var_b) ? var_max : var_b;   //max. value of RGB
-        float del_max = var_max - var_min;               //Delta RGB value
+        var_max = (var_max > var_b) ? var_max : var_b;   //máximo de RGB
+        float del_max = var_max - var_min;               //Valor Delta de RGB
         
         L = ( var_max + var_min ) / 2;
-        if ( del_max == 0 )//This is a gray, no chroma...
+        if ( del_max == 0 )
+        // Si no hay diferencia entre el máximo y mínimo, significa que el color es un gris puro.
         {
             H = 0;         
             S = 0;    
         }
-        else                                    //Chromatic data...
+        else   
+        // Si hay diferencia, calculamos Saturación (S) y Tono (H).                                 
         {
             if ( L < 0.5 )
                 S = del_max/(var_max+var_min);
             else
                 S = del_max/(2-var_max-var_min );
 
+            // Calculamos las diferencias relativas de cada componente RGB.
             float del_r = (((var_max-var_r)/6)+(del_max/2))/del_max;
             float del_g = (((var_max-var_g)/6)+(del_max/2))/del_max;
             float del_b = (((var_max-var_b)/6)+(del_max/2))/del_max;
@@ -304,11 +311,15 @@ HSL_IMG rgb2hsl(PPM_IMG img_in)
             }
             
         }
-        
+
+        // Ajustamos el rango de H para que esté en [0,1].
+
         if ( H < 0 )
             H += 1;
         if ( H > 1 )
             H -= 1;
+
+        // Asignamos los valores calculados a la estructura de salida.
 
         img_out.h[i] = H;
         img_out.s[i] = S;
@@ -341,6 +352,10 @@ PPM_IMG hsl2rgb(HSL_IMG img_in)
     result.img_g = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     result.img_b = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
     
+
+    // Este pragma paraleliza el bucle for con OpenMP. Cada iteración es independiente,
+    // por lo que se puede ejecutar en paralelo para mejorar el rendimiento.
+    // `schedule(runtime)` permite ajustar dinámicamente cómo se distribuyen las iteraciones.
     #pragma omp parallel for schedule(runtime)
     for(i = 0; i < img_in.width*img_in.height; i ++){
         float H = img_in.h[i];
@@ -351,6 +366,8 @@ PPM_IMG hsl2rgb(HSL_IMG img_in)
         unsigned char r,g,b;
         
         if ( S == 0 )
+        // Si la saturación es 0, el color es un gris puro.
+        // En este caso, todos los canales RGB tienen el mismo valor que L.
         {
             r = L * 255;
             g = L * 255;
@@ -364,6 +381,9 @@ PPM_IMG hsl2rgb(HSL_IMG img_in)
             else
                 var_2 = ( L + S ) - ( S * L );
 
+            // Convertimos el tono (H) y las variables intermedias a valores RGB usando Hue_2_RGB.
+            // `Hue_2_RGB` es una función auxiliar que calcula los valores RGB
+            // a partir de las variables `var_1`, `var_2` y el tono modificado.
             var_1 = 2 * L - var_2;
             r = 255 * Hue_2_RGB( var_1, var_2, H + (1.0f/3.0f) );
             g = 255 * Hue_2_RGB( var_1, var_2, H );
@@ -391,14 +411,25 @@ YUV_IMG rgb2yuv(PPM_IMG img_in)
     img_out.img_u = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
     img_out.img_v = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
 
+
+    // Paralelizamos el bucle con OpenMP:
+    // - `private(r, g, b, y, cb, cr)`: Cada hilo tiene su propia copia de estas variables temporales,
+    //   evitando conflictos durante las operaciones.
+    // - `schedule(runtime)`: Permite configurar el esquema de planificación en tiempo de ejecución
+    //   (por ejemplo, estático o dinámico) mediante la variable OMP_SCHEDULE.
     #pragma omp parallel for private(r, g, b, y, cb, cr) schedule(runtime)
     for(i = 0; i < img_out.w*img_out.h; i ++){
+        // Leemos los valores RGB del píxel actual.
         r = img_in.img_r[i];
         g = img_in.img_g[i];
         b = img_in.img_b[i];
         
+        // Convertimos de RGB a YUV utilizando las fórmulas estándar.
+        // Y: Luminancia (representa el brillo del píxel)
         y  = (unsigned char)( 0.299*r + 0.587*g +  0.114*b);
+        // U (Cb): Componente de crominancia azul
         cb = (unsigned char)(-0.169*r - 0.331*g +  0.499*b + 128);
+        // V (Cr): Componente de crominancia roja.
         cr = (unsigned char)( 0.499*r - 0.418*g - 0.0813*b + 128);
         
         img_out.img_y[i] = y;
@@ -434,16 +465,22 @@ PPM_IMG yuv2rgb(YUV_IMG img_in)
     img_out.img_g = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
     img_out.img_b = (unsigned char *)malloc(sizeof(unsigned char)*img_out.w*img_out.h);
 
+    // Paralelizamos el bucle con OpenMP:
+    // - `private(y, cb, cr, rt, gt, bt)`: Cada hilo tiene su propia copia de estas variables temporales.
+    // - `schedule(runtime)`: Permite configurar el esquema de planificación en tiempo de ejecución.
     #pragma omp parallel for private(y, cb, cr, rt, gt, bt) schedule(runtime)
     for(i = 0; i < img_out.w*img_out.h; i ++){
+        // Leemos los valores Y, U (Cb) y V (Cr) del píxel actual.
         y  = (int)img_in.img_y[i];
         cb = (int)img_in.img_u[i] - 128;
         cr = (int)img_in.img_v[i] - 128;
         
+        // Convertimos de YUV a RGB utilizando las fórmulas estándar.
         rt  = (int)( y + 1.402*cr);
         gt  = (int)( y - 0.344*cb - 0.714*cr);
         bt  = (int)( y + 1.772*cb);
 
+        // Limitamos los valores RGB al rango válido [0, 255] usando `clip_rgb`.
         img_out.img_r[i] = clip_rgb(rt);
         img_out.img_g[i] = clip_rgb(gt);
         img_out.img_b[i] = clip_rgb(bt);
