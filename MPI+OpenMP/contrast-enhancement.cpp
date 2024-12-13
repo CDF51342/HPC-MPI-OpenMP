@@ -37,6 +37,7 @@ PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
     // Utilizamos MPI_Scatterv debido a que no tenemos tamaños iguales
     int *sendcounts = (int *)malloc(size * sizeof(int));
     int *displs = (int *)malloc(size * sizeof(int));
+    #pragma omp parallel for schedule(runtime)
     for (int i = 0; i < size; i++) {
         sendcounts[i] = (img_in.h / size) * img_in.w;
         if (i == size - 1) {
@@ -113,6 +114,7 @@ PPM_IMG contrast_enhancement_c_yuv(PPM_IMG img_in) {
     // Preparar las estructuras para Scatterv (distribuir partes de la imagen)
     int *sendcounts = (int *)malloc(size * sizeof(int)); // Tamaños de los datos enviados
     int *displs = (int *)malloc(size * sizeof(int));     // Desplazamientos en el buffer de entrada
+    #pragma omp parallel for schedule(runtime)
     for (int i = 0; i < size; i++) {
         sendcounts[i] = (img_in.h / size) * img_in.w;    // Tamaño estándar para cada proceso
         if (i == size - 1) {
@@ -219,6 +221,7 @@ PPM_IMG contrast_enhancement_c_hsl(PPM_IMG img_in) {
     // Preparar las estructuras para Scatterv (distribuir partes de la imagen entre procesos)
     int *sendcounts = (int *)malloc(size * sizeof(int)); // Tamaño de los datos enviados a cada proceso
     int *displs = (int *)malloc(size * sizeof(int));     // Desplazamientos en el buffer de origen
+    #pragma omp parallel for schedule(runtime)
     for (int i = 0; i < size; i++) {
         sendcounts[i] = (img_in.h / size) * img_in.w; // Tamaño estándar
         if (i == size - 1) {
