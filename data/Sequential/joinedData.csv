@@ -1,2 +1,2 @@
 Label,ReadGray(s),ReadColor(s),Gray(s),Hsl(s),Yuv(s),WriteGray(s),WriteHsl(s),WriteYuv(s),Total(s)
-Sequential,0.0306,0.66,0.7082,5.6868,2.5918,3.1919,9.9641,10.3543,35.527
+Sequential,0.0271,0.6536,0.7087,5.7105,2.6001,3.5113,10.1144,10.9189,34.2523

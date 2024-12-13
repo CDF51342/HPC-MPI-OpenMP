@@ -24,6 +24,7 @@ def confidence_interval(x):
     upperLimit = x.mean() + 1.96 * x.std() / (len(x) ** 0.5)
     lowerLimit = x.mean() - 1.96 * x.std() / (len(x) ** 0.5)
     filtered_x = x[(x >= lowerLimit) & (x <= upperLimit)]
+    filtered_x = x
     return filtered_x.mean()
 
 def read_data() -> pd.DataFrame:
