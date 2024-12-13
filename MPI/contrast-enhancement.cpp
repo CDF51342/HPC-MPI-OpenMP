@@ -14,36 +14,63 @@ PGM_IMG contrast_enhancement_g(PGM_IMG img_in)
     result.h = img_in.h;
 
     // Inicializamos MPI
-    int size;
+    int size, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    // Dividimos la imagen entre los procesos
-    unsigned char *img_local = (unsigned char *)malloc(result.w * result.h / size * sizeof(unsigned char));
-    MPI_Scatter(img_in.img, result.w * result.h / size, MPI_UNSIGNED_CHAR, img_local, result.w * result.h / size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    // Extraemos las dimensiones que necesitamos
+    int local_width = img_in.w;
+    int local_height = img_in.h / size;
+    int remainder = img_in.h % size; // Resto de divisiones desiguales
+    int local_size = local_width * local_height;
+
+    // Ajustamos el tamaño para el último proceso
+    if (rank == size - 1) {
+        local_height += remainder;
+        local_size = local_width * local_height;
+    }
+
+    // Asignamos la memoria para las partes locales de la imagen
+    unsigned char *img_local = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+
+    // Dividimos la imagen entre procesos
+    // Utilizamos MPI_Scatterv debido a que no tenemos tamaños iguales
+    int *sendcounts = (int *)malloc(size * sizeof(int));
+    int *displs = (int *)malloc(size * sizeof(int));
+    for (int i = 0; i < size; i++) {
+        sendcounts[i] = (img_in.h / size) * img_in.w;
+        if (i == size - 1) {
+            sendcounts[i] += remainder * img_in.w;
+        }
+        displs[i] = i * (img_in.h / size) * img_in.w;
+    }
+
+    MPI_Scatterv(img_in.img, sendcounts, displs, MPI_UNSIGNED_CHAR, img_local, local_size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
     // Calculamos el histograma local
-    histogram(hist_local, img_local, result.w * result.h / size, 256);
+    histogram(hist_local, img_local, local_size, 256);
 
-    // Combinamos los histogramas de todos los procesos en un histograma local
+    // Combinamos los histogramas de todos los procesos en un histograma global
     MPI_Allreduce(hist_local, global_hist, 256, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
     // Aplicamos la ecualización del histograma localmente
-    unsigned char *img_local_out = (unsigned char *)malloc(result.w * result.h / size * sizeof(unsigned char));
-    histogram_equalization(img_local_out, img_local, global_hist, result.w * result.h / size, 256, result.w * result.h);
+    unsigned char *img_local_out = (unsigned char *)malloc(local_size * sizeof(unsigned char));
+    histogram_equalization(img_local_out, img_local, global_hist, local_size, 256, img_in.w * img_in.h);
 
     // Solo el proceso 0 tiene la imagen final
-    if (rank == 0)
-        // Creamos la imagen final combinada
+    if (rank == 0) {
         result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
+    }
 
     // Recolectamos los datos procesados de todos los procesos
-    MPI_Gather(img_local_out, result.w * result.h / size, MPI_UNSIGNED_CHAR, result.img, result.w * result.h / size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-    
+    MPI_Gatherv(img_local_out, local_size, MPI_UNSIGNED_CHAR, result.img, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
     // Liberamos memoria
     free(img_local);
     free(img_local_out);
+    free(sendcounts);
+    free(displs);
+
     return result;
 }
 
