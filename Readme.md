@@ -4,6 +4,21 @@ Este proyecto implementa una solución de mejora de contraste de imágenes utili
 
 ---
 
+## Contenidos
+- [Estructura del Proyecto](#estructura-del-proyecto)
+- [Instalación y Ejecución](#instalación-y-ejecución)
+   - [Compilación](#compilación)
+   - [Ejecución](#ejecución)
+   - [Uso de Scripts](#uso-de-scripts)
+- [Configuración de Parámetros](#configuración-de-parámetros)
+   - [OpenMP](#openmp)
+   - [MPI](#mpi)
+   - [Versión Híbrida](#versión-híbrida)
+- [Resultados](#resultados)
+- [Autores](#autores)
+
+---
+
 ## Estructura del Proyecto
 
 El proyecto está organizado en los siguientes directorios principales:
